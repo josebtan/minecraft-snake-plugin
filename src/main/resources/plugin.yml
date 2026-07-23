@@ -1,0 +1,11 @@
+name: SnakePlugin
+version: '${project.version}'
+main: com.josebtan.snakeplugin.SnakePlugin
+api-version: '1.20'
+author: josebtan
+description: Clasico juego de Snake para Minecraft, multijugador, con bloques de lana de colores.
+
+commands:
+  snakedebug:
+    description: "Comando temporal de pruebas para la Etapa 1 (movimiento). Se reemplazara en la Etapa 2 por /snake."
+    usage: "/snakedebug <start|stop>"
