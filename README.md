@@ -13,10 +13,17 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
 
 - Cada jugador tiene una serpiente cuya **cabeza** es un bloque de lana de un color
   distinto (rojo, azul, verde, etc.).
+- El jugador va **montado** sobre su cabeza: se mueve fisicamente junto a ella,
+  como si la estuviera "cabalgando" desde el aire, por encima del tablero.
+- La camara del jugador queda **fija en vista cenital** (mirando hacia abajo) y
+  **bloqueada**: no se puede rotar ni cambiar hasta que termine la partida.
+  ⚠️ Aviso tecnico: Minecraft no permite forzar la vista en tercera persona (F5)
+  desde el servidor, esa tecla es exclusiva del cliente. Lo que si se bloquea es
+  la direccion de la camara (mirando siempre hacia abajo), consiguiendo el efecto
+  de "vista de pajaro" tipico de un Snake visto desde arriba.
 - La serpiente se mueve sola, casilla a casilla, sobre una rejilla horizontal fija
-  (una "Y" concreta del mundo).
-- El jugador la dirige simplemente **mirando** hacia el Norte, Sur, Este u Oeste;
-  no necesita moverse fisicamente para controlarla.
+  (una "Y" concreta del mundo), y el jugador la dirige con las **teclas de
+  movimiento (WASD)**: W = Norte, S = Sur, A = Oeste, D = Este.
 - Al pasar sobre un bloque de comida, la serpiente **crece**: se anade un nuevo
   bloque a la cola, que sigue el recorrido exacto que hizo la cabeza (igual que en
   el Snake clasico).
@@ -28,9 +35,11 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
 El desarrollo esta dividido en 4 etapas, tal y como se planifico:
 
 - [x] **Etapa 1 — Movimiento del jugador y la cabeza de la serpiente.**
-  Estructura base del proyecto (Maven + Paper API), y logica de movimiento de la
-  cabeza sobre la rejilla, controlada por la direccion hacia la que mira el
-  jugador. Incluye un comando temporal de pruebas: `/snakedebug start|stop`.
+  Estructura base del proyecto (Maven + Paper API). El jugador va montado sobre
+  la cabeza de su serpiente (se mueve fisicamente con ella), con la camara fija
+  en vista cenital y bloqueada durante toda la partida, controlando el
+  movimiento con las teclas WASD. Incluye un comando temporal de pruebas:
+  `/snakedebug start|stop`.
 - [ ] **Etapa 2 — Comandos y creacion del campo de juego.**
   Sistema de comandos definitivo (`/snake ...`) y delimitacion de una zona de
   juego (arena) donde la serpiente puede moverse, con paredes/limites.
@@ -46,7 +55,9 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
 
 - Java 17+
 - Maven 3.8+
-- Un servidor [Paper](https://papermc.io/) 1.20.x para probar el plugin
+- Un servidor [Paper](https://papermc.io/) **1.21.x** para probar el plugin
+  (se necesita una build reciente porque el control WASD usa `PlayerInputEvent`,
+  una API que no existe en versiones antiguas de Paper)
 
 ## Como compilar
 
@@ -62,13 +73,20 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 
 ## Probar la Etapa 1
 
-1. Compila el plugin y colocalo en `plugins/` de un servidor Paper 1.20.x.
+1. Compila el plugin y colocalo en `plugins/` de un servidor Paper 1.21.x.
 2. Inicia el servidor y entra con un jugador.
-3. Ejecuta `/snakedebug start`: aparecera un bloque de lana bajo tus pies, que
-   empezara a moverse solo.
-4. Mira hacia el Norte, Sur, Este u Oeste para cambiar su direccion.
-5. Ejecuta `/snakedebug stop` para detenerla y eliminarla.
+3. Ejecuta `/snakedebug start`: apareceras montado en el aire, por encima de un
+   bloque de lana de color, con la camara mirando hacia abajo (fija, no la puedes
+   mover con el raton).
+4. Usa **W / A / S / D** para dirigir la serpiente (Norte / Oeste / Sur / Este).
+   Te desplazaras junto con la cabeza automaticamente.
+5. Ejecuta `/snakedebug stop` para bajarte, detener la partida y recuperar el
+   control normal de tu camara.
 
 > Nota: en la Etapa 1 la serpiente no tiene todavia campo de juego delimitado,
-> comida, ni cola — solo se prueba el movimiento de la cabeza. El resto llega en
-> las siguientes etapas.
+> comida, ni cola — solo se prueba el movimiento de la cabeza (y del jugador
+> montado sobre ella). El resto llega en las siguientes etapas.
+>
+> Nota tecnica: `PlayerInputEvent` es una API relativamente nueva de Paper. Si al
+> compilar en GitHub Actions falla por esa clase, es que el servidor de Paper
+> objetivo necesita una build aun mas reciente — avisame y ajusto la version.

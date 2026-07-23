@@ -2,6 +2,7 @@ package com.josebtan.snakeplugin;
 
 import com.josebtan.snakeplugin.command.SnakeDebugCommand;
 import com.josebtan.snakeplugin.game.GameManager;
+import com.josebtan.snakeplugin.listener.SnakeInputListener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -22,7 +23,9 @@ public final class SnakePlugin extends JavaPlugin {
             debugCommand.setExecutor(new SnakeDebugCommand(gameManager));
         }
 
-        getLogger().info("SnakePlugin habilitado (Etapa 1: movimiento del jugador y la cabeza).");
+        getServer().getPluginManager().registerEvents(new SnakeInputListener(gameManager), this);
+
+        getLogger().info("SnakePlugin habilitado (Etapa 1: movimiento del jugador montado en la cabeza, WASD).");
     }
 
     @Override

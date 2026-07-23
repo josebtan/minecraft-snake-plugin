@@ -16,7 +16,9 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>1.20.4-R0.1-SNAPSHOT</paper.version>
+        <!-- Se sube de 1.20.4 a 1.21.1 porque necesitamos PlayerInputEvent (lectura directa
+             de las teclas WASD), que no existe en versiones anteriores de Paper. -->
+        <paper.version>1.21.1-R0.1-SNAPSHOT</paper.version>
     </properties>
 
     <repositories>

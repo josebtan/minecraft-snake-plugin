@@ -35,27 +35,4 @@ public enum Direction {
             case WEST -> EAST;
         };
     }
-
-    /**
-     * Convierte el "yaw" (angulo horizontal hacia donde mira el jugador) en una de las
-     * 4 direcciones de la rejilla. Se usa para que el jugador controle el snake con
-     * la mirada, sin necesidad de moverse fisicamente.
-     *
-     * En Minecraft, yaw 0/360 = Sur, 90 = Oeste, 180 = Norte, 270 = Este (aprox).
-     */
-    public static Direction fromYaw(float yaw) {
-        float normalized = yaw % 360;
-        if (normalized < 0) {
-            normalized += 360;
-        }
-        if (normalized >= 45 && normalized < 135) {
-            return WEST;
-        } else if (normalized >= 135 && normalized < 225) {
-            return NORTH;
-        } else if (normalized >= 225 && normalized < 315) {
-            return EAST;
-        } else {
-            return SOUTH;
-        }
-    }
 }
