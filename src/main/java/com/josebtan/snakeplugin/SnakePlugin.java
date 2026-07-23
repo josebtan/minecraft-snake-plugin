@@ -25,7 +25,7 @@ public final class SnakePlugin extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new SnakeInputListener(gameManager), this);
 
-        getLogger().info("SnakePlugin habilitado (Etapa 1: movimiento del jugador montado en la cabeza, WASD).");
+        getLogger().info("SnakePlugin habilitado (Etapa 1: jugador viajando con la cabeza, camara cenital fija, control WASD).");
     }
 
     @Override

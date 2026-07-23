@@ -97,7 +97,7 @@ public class GameManager {
         }
     }
 
-    /** Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y a su jugador montado) una casilla. */
+    /** Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y al jugador que viaja con ella) una casilla. */
     private void tickMovement() {
         for (SnakeGame game : games.values()) {
             Player player = Bukkit.getPlayer(game.getPlayerId());
@@ -108,14 +108,14 @@ public class GameManager {
         }
     }
 
-    /** Se ejecuta cada tick: reafirma la vista cenital bloqueada de cada jugador en partida. */
+    /** Se ejecuta cada tick: reafirma la posicion y vista cenital bloqueadas de cada jugador. */
     private void tickCameras() {
         for (SnakeGame game : games.values()) {
             Player player = Bukkit.getPlayer(game.getPlayerId());
             if (player == null || !player.isOnline()) {
                 continue;
             }
-            game.enforceCameraLock(player);
+            game.enforceLock(player);
         }
     }
 
