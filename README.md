@@ -13,10 +13,11 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
 
 - Cada jugador tiene una serpiente cuya **cabeza** es un bloque de lana de un color
   distinto (rojo, azul, verde, etc.).
-- El jugador va **montado en una montura invisible** (un `ArmorStand`, decorado
-  con lana del mismo color de su serpiente para poder identificarla desde
-  fuera) que flota justo encima de la cabeza. Al moverse la cabeza, la montura
-  se mueve con ella y el jugador viaja automaticamente, como si la cabalgara.
+- El jugador va **montado en una montura invisible** (un cerdo con silla,
+  decorado con lana del mismo color de su serpiente para poder identificarla
+  desde fuera) que flota justo encima de la cabeza. Al moverse la cabeza, la
+  montura se mueve con ella y el jugador viaja automaticamente, como si la
+  cabalgara.
 - La camara del jugador queda **fija en vista cenital** (mirando hacia abajo) y
   **bloqueada**: no se puede rotar ni cambiar hasta que termine la partida.
   ⚠️ Aviso tecnico: Minecraft no permite forzar la vista en tercera persona (F5)
@@ -38,7 +39,7 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
 
 - [x] **Etapa 1 — Movimiento del jugador y la cabeza de la serpiente.**
   Estructura base del proyecto (Maven + Paper API). El jugador va montado en un
-  `ArmorStand` invisible (decorado con lana del color de su serpiente) que
+  cerdo invisible con silla (decorado con lana del color de su serpiente) que
   viaja justo encima de la cabeza, con la camara fija en vista cenital y
   bloqueada durante toda la partida, controlando el movimiento con las teclas
   WASD. Incluye un comando temporal de pruebas: `/snakedebug start|stop`.
@@ -57,9 +58,7 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
 
 - Java 17+
 - Maven 3.8+
-- Un servidor [Paper](https://papermc.io/) **1.21.x** para probar el plugin
-  (se necesita una build reciente porque el control WASD usa `PlayerInputEvent`,
-  una API que no existe en versiones antiguas de Paper)
+- Un servidor [Paper](https://papermc.io/) 1.20.x para probar el plugin
 
 ## Como compilar
 
@@ -75,14 +74,14 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 
 ## Probar la Etapa 1
 
-1. Compila el plugin y colocalo en `plugins/` de un servidor Paper 1.21.x.
+1. Compila el plugin y colocalo en `plugins/` de un servidor Paper 1.20.x.
 2. Inicia el servidor y entra con un jugador.
 3. Ejecuta `/snakedebug start`: apareceras montado en el aire, por encima de un
    bloque de lana de color, con la camara mirando hacia abajo (fija, no la puedes
    mover con el raton).
 4. Usa **W / A / S / D**: cada tecla mueve la serpiente en una direccion distinta
-   de la rejilla (Norte / Sur / Oeste / Este respectivamente). Te desplazaras
-   junto con la cabeza automaticamente al ir montado.
+   de la rejilla. Te desplazaras junto con la cabeza automaticamente al ir
+   montado.
 5. Ejecuta `/snakedebug stop` para bajarte, detener la partida y recuperar el
    control normal de tu camara.
 
@@ -90,6 +89,10 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 > comida, ni cola — solo se prueba el movimiento de la cabeza (y del jugador
 > montado sobre ella). El resto llega en las siguientes etapas.
 >
-> Nota tecnica: `PlayerInputEvent` es una API relativamente nueva de Paper. Si
-> el build de GitHub Actions falla al compilar por esa clase, avisame y ajusto
-> la version de Paper o cambio de tecnica.
+> Nota sobre la version de Paper: el proyecto se quedo fijado en 1.20.4 porque
+> es la unica version que confirme que resuelve bien desde este entorno de
+> desarrollo. PaperMC parece haber cambiado su esquema de versionado en algun
+> momento posterior (sus tags de GitHub saltan de "1.21.11" a "26.1.2"), asi
+> que si quieres apuntar el plugin a una version de servidor mas reciente,
+> dime la version exacta que usas y confirmamos juntos las coordenadas Maven
+> correctas (o revisa https://papermc.io/downloads / su documentacion).

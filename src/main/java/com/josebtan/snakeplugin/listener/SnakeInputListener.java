@@ -4,20 +4,25 @@ import com.josebtan.snakeplugin.game.Direction;
 import com.josebtan.snakeplugin.game.GameManager;
 import com.josebtan.snakeplugin.game.SnakeGame;
 import org.bukkit.Location;
+import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
 
 /**
  * Traduce la entrada de teclado del jugador (WASD) en direcciones de
  * movimiento de su serpiente, y protege la partida en curso.
  *
- * Nota tecnica: PlayerInputEvent es una API relativamente reciente de Paper.
- * Si el build de GitHub Actions falla al compilar esta clase, significa que la
- * version de Paper indicada en el pom.xml todavia no la incluye.
+ * Como el jugador va montado en un cerdo con silla (Steerable), al pulsar
+ * WASD el propio Minecraft mueve un poco al cerdo en esa direccion: eso es lo
+ * que detectamos via VehicleMoveEvent (API estable, sin necesidad de ninguna
+ * version reciente de Paper). En cuanto detectamos la direccion, "anclamos"
+ * de nuevo el cerdo a su casilla, para que no se desplace libremente: solo se
+ * mueve en pasos discretos, a cargo de SnakeGame#tick.
  */
 public class SnakeInputListener implements Listener {
 
@@ -27,38 +32,38 @@ public class SnakeInputListener implements Listener {
         this.gameManager = gameManager;
     }
 
-    /* DIAGNOSTICO TEMPORAL: deshabilitado para aislar si PlayerInputEvent es la causa del fallo de build.
     @EventHandler
-    public void onPlayerInput(PlayerInputEvent event) {
-        Player player = event.getPlayer();
-        if (!gameManager.hasGame(player)) {
+    public void onVehicleMove(VehicleMoveEvent event) {
+        if (!(event.getVehicle() instanceof Pig pig) || pig.getPassengers().isEmpty()) {
+            return;
+        }
+        if (!(pig.getPassengers().get(0) instanceof Player player)) {
+            return;
+        }
+        SnakeGame game = gameManager.getGame(player);
+        if (game == null || !game.isActive() || !pig.equals(game.getMount())) {
             return;
         }
 
-        var input = event.getInput();
+        double dx = event.getTo().getX() - event.getFrom().getX();
+        double dz = event.getTo().getZ() - event.getFrom().getZ();
 
-        Direction requested = null;
-        if (input.isForward()) {
-            requested = Direction.NORTH; // W
-        } else if (input.isBackward()) {
-            requested = Direction.SOUTH; // S
-        } else if (input.isLeft()) {
-            requested = Direction.WEST;  // A
-        } else if (input.isRight()) {
-            requested = Direction.EAST;  // D
-        }
-
-        if (requested != null) {
+        if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
+            Direction requested = Math.abs(dx) > Math.abs(dz)
+                    ? (dx > 0 ? Direction.EAST : Direction.WEST)
+                    : (dz > 0 ? Direction.SOUTH : Direction.NORTH);
             gameManager.requestDirection(player, requested);
         }
+
+        // Evitamos que el cerdo se desplace libremente: siempre vuelve a su casilla.
+        game.reanchorMount();
     }
-    */
 
     /**
-     * Mientras el jugador esta montado, su posicion la controla la montura, pero
-     * puede seguir moviendo la camara con el raton. Aqui la forzamos de vuelta a
-     * la vista cenital fija cada vez que intenta cambiarla (no usamos un bucle
-     * constante: solo actua cuando el propio cliente envia un cambio de vista).
+     * Mientras el jugador esta montado, puede seguir moviendo la camara con el
+     * raton. Aqui la forzamos de vuelta a la vista cenital fija cada vez que
+     * intenta cambiarla (no usamos un bucle constante: solo actua cuando el
+     * propio cliente envia un cambio de vista).
      */
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {

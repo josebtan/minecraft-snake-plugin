@@ -16,8 +16,13 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- DIAGNOSTICO: probando si esta version concreta de Paper existe en su repositorio. -->
-        <paper.version>1.21-R0.1-SNAPSHOT</paper.version>
+        <!-- Nos quedamos en esta version porque es la que confirmadamente resuelve bien
+             contra el repositorio de Paper desde este entorno. PaperMC parece haber
+             cambiado su esquema de versionado mas adelante (se ve en sus tags de GitHub,
+             que saltan de 1.21.11 a "26.1.2"), asi que si quieres compilar contra una
+             version mas reciente de Paper, habria que confirmar las coordenadas Maven
+             correctas actuales (por ejemplo en https://papermc.io/downloads o su docs). -->
+        <paper.version>1.20.4-R0.1-SNAPSHOT</paper.version>
     </properties>
 
     <repositories>

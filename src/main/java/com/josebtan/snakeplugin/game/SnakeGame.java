@@ -2,7 +2,7 @@ package com.josebtan.snakeplugin.game;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -14,22 +14,18 @@ import java.util.UUID;
  * Representa la partida de un jugador: su serpiente, posicion de la cabeza,
  * direccion actual y (en etapas futuras) su cola y puntuacion.
  *
- * ETAPA 1 (version 3): el jugador va montado en un ArmorStand invisible que
- * flota justo encima de la cabeza de la serpiente. Al mover el ArmorStand, el
- * jugador viaja con el automaticamente (mecanica de "montura" real de
- * Minecraft), sin necesidad de tele-transportarlo constantemente: mucho mas
- * ligero para el servidor que la version anterior.
+ * ETAPA 1 (version 4): el jugador va montado en un CERDO invisible con silla,
+ * que flota justo encima de la cabeza de la serpiente, decorado con lana del
+ * color de su serpiente (a modo de "casco") para identificarla desde fuera.
  *
- * El ArmorStand lleva puesta lana del color de la serpiente a modo de "casco",
- * para poder identificarla desde fuera. Se descarto usar un Block Display por
- * simplicidad: un ArmorStand con equipo no necesita ninguna limpieza especial
- * mas alla de eliminarlo (remove()) al terminar la partida.
- *
- * La camara del jugador se bloquea en vista cenital (mirando hacia abajo) desde
- * SnakeInputListener, reaccionando a sus intentos de mover el raton, y el
- * movimiento se lee con las teclas WASD via PlayerInputEvent (un ArmorStand no
- * es una montura "Steerable" como un caballo, asi que sin esa API no habria
- * forma de detectar que tecla se pulsa mientras se esta montado).
+ * ¿Por que un cerdo y no un ArmorStand? Un ArmorStand no es una montura
+ * "Steerable": Minecraft simplemente no envia ninguna senal de las teclas
+ * WASD para monturas que no sean caballo/cerdo/strider/bote, sin importar la
+ * version del servidor. Un cerdo con silla si es Steerable de forma nativa
+ * desde hace muchisimas versiones, asi que podemos detectar hacia donde
+ * intenta moverse (VehicleMoveEvent, ver SnakeInputListener) sin depender de
+ * ninguna API reciente de Paper. En cuanto se detecta la direccion, se vuelve
+ * a anclar el cerdo a la rejilla (no se le deja moverse libremente).
  *
  * Sigue sin haber campo delimitado (Etapa 2), comida/puntos (Etapa 3), ni
  * crecimiento de cola (Etapa 4).
@@ -55,17 +51,18 @@ public class SnakeGame {
     private Direction currentDirection;
 
     /**
-     * Direccion solicitada por el jugador via WASD. Se aplica en el siguiente tick
-     * de movimiento (no al instante), igual que en el Snake clasico, y se descarta
-     * si intenta invertir la direccion actual (giro de 180 grados).
+     * Direccion solicitada por el jugador via WASD (detectada por como intenta
+     * mover la montura). Se aplica en el siguiente tick de movimiento (no al
+     * instante), igual que en el Snake clasico, y se descarta si intenta
+     * invertir la direccion actual (giro de 180 grados).
      */
     private Direction requestedDirection;
 
     /** Cola de segmentos del cuerpo. Vacia por ahora, se usara en la Etapa 4. */
     private final Deque<Location> tail = new ArrayDeque<>();
 
-    /** Montura invisible (ArmorStand) sobre la que viaja el jugador. */
-    private ArmorStand mount;
+    /** Montura invisible (cerdo con silla) sobre la que viaja el jugador. */
+    private Pig mount;
 
     private boolean active = false;
 
@@ -98,27 +95,38 @@ public class SnakeGame {
         mount.addPassenger(player);
     }
 
-    /** Crea el ArmorStand invisible decorado con lana del color de la serpiente. */
-    private ArmorStand spawnMount(Location head) {
+    /** Crea el cerdo invisible con silla, decorado con lana del color de la serpiente. */
+    private Pig spawnMount(Location head) {
         Location spawnAt = mountLocationFor(head);
-        return spawnAt.getWorld().spawn(spawnAt, ArmorStand.class, stand -> {
-            stand.setInvisible(true);
-            stand.setSmall(true);
-            stand.setBasePlate(false);
-            stand.setArms(false);
-            stand.setMarker(false); // marker=false: necesario para poder llevar pasajeros
-            stand.setGravity(false);
-            stand.setInvulnerable(true);
-            stand.setSilent(true);
-            stand.setCollidable(false);
-            stand.setPersistent(false);
-            stand.getEquipment().setHelmet(new ItemStack(color.getWoolMaterial()));
+        return spawnAt.getWorld().spawn(spawnAt, Pig.class, pig -> {
+            pig.setAdult();
+            pig.setSaddle(true); // imprescindible para que sea "Steerable" y se pueda dirigir con WASD
+            pig.setInvisible(true);
+            pig.setGravity(false);
+            pig.setInvulnerable(true);
+            pig.setSilent(true);
+            pig.setCollidable(false);
+            pig.setPersistent(false);
+            pig.setBreed(false);
+            pig.getEquipment().setHelmet(new ItemStack(color.getWoolMaterial()));
         });
     }
 
     /** Calcula la posicion de la montura: centrada sobre la casilla y elevada. */
     private Location mountLocationFor(Location boardLocation) {
         return boardLocation.clone().add(0.5, MOUNT_HEIGHT, 0.5);
+    }
+
+    /**
+     * Vuelve a anclar la montura a su posicion correcta en la rejilla. Se llama
+     * desde SnakeInputListener justo despues de detectar hacia donde intento
+     * moverse el jugador, para impedir que el cerdo se desplace libremente
+     * (solo debe moverse en pasos discretos, en el tick de movimiento).
+     */
+    public void reanchorMount() {
+        if (active && mount != null && headLocation != null) {
+            mount.teleport(mountLocationFor(headLocation));
+        }
     }
 
     /**
@@ -153,8 +161,9 @@ public class SnakeGame {
     }
 
     /**
-     * Registra la direccion pedida por el jugador (leida de las teclas WASD).
-     * Se ignora si supone invertir la direccion actual de golpe.
+     * Registra la direccion pedida por el jugador (detectada por como intenta
+     * mover la montura con WASD). Se ignora si supone invertir la direccion
+     * actual de golpe.
      */
     public void requestDirection(Direction requested) {
         if (!active) {
@@ -207,7 +216,7 @@ public class SnakeGame {
         return currentDirection;
     }
 
-    public ArmorStand getMount() {
+    public Pig getMount() {
         return mount;
     }
 
