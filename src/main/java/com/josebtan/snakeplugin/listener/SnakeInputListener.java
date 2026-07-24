@@ -3,7 +3,6 @@ package com.josebtan.snakeplugin.listener;
 import com.josebtan.snakeplugin.game.Direction;
 import com.josebtan.snakeplugin.game.GameManager;
 import com.josebtan.snakeplugin.game.SnakeGame;
-import io.papermc.paper.event.player.PlayerInputEvent;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -28,7 +27,7 @@ public class SnakeInputListener implements Listener {
         this.gameManager = gameManager;
     }
 
-    /** Lee las teclas WASD directamente (funciona incluso montado, sin necesidad de moverse). */
+    /* DIAGNOSTICO TEMPORAL: deshabilitado para aislar si PlayerInputEvent es la causa del fallo de build.
     @EventHandler
     public void onPlayerInput(PlayerInputEvent event) {
         Player player = event.getPlayer();
@@ -38,8 +37,6 @@ public class SnakeInputListener implements Listener {
 
         var input = event.getInput();
 
-        // Prioridad simple: si pulsa varias teclas a la vez, se atiende una sola
-        // (igual que en el Snake clasico, solo se puede ir en una direccion).
         Direction requested = null;
         if (input.isForward()) {
             requested = Direction.NORTH; // W
@@ -55,6 +52,7 @@ public class SnakeInputListener implements Listener {
             gameManager.requestDirection(player, requested);
         }
     }
+    */
 
     /**
      * Mientras el jugador esta montado, su posicion la controla la montura, pero
