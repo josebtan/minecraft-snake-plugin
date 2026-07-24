@@ -16,8 +16,8 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- DIAGNOSTICO: temporalmente en la version conocida-buena para aislar el fallo de build. -->
-        <paper.version>1.20.4-R0.1-SNAPSHOT</paper.version>
+        <!-- DIAGNOSTICO: probando si esta version concreta de Paper existe en su repositorio. -->
+        <paper.version>1.21.4-R0.1-SNAPSHOT</paper.version>
     </properties>
 
     <repositories>
