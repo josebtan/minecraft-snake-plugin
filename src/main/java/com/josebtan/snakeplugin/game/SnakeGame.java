@@ -2,7 +2,7 @@ package com.josebtan.snakeplugin.game;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.entity.Pig;
+import org.bukkit.entity.Horse;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -14,18 +14,28 @@ import java.util.UUID;
  * Representa la partida de un jugador: su serpiente, posicion de la cabeza,
  * direccion actual y (en etapas futuras) su cola y puntuacion.
  *
- * ETAPA 1 (version 4): el jugador va montado en un CERDO invisible con silla,
- * que flota justo encima de la cabeza de la serpiente, decorado con lana del
- * color de su serpiente (a modo de "casco") para identificarla desde fuera.
+ * ETAPA 1 (version 6): el jugador va montado en un CABALLO invisible, que
+ * flota justo encima de la cabeza de la serpiente y viaja con ella.
  *
- * ¿Por que un cerdo y no un ArmorStand? Un ArmorStand no es una montura
- * "Steerable": Minecraft simplemente no envia ninguna senal de las teclas
- * WASD para monturas que no sean caballo/cerdo/strider/bote, sin importar la
- * version del servidor. Un cerdo con silla si es Steerable de forma nativa
- * desde hace muchisimas versiones, asi que podemos detectar hacia donde
- * intenta moverse (VehicleMoveEvent, ver SnakeInputListener) sin depender de
- * ninguna API reciente de Paper. En cuanto se detecta la direccion, se vuelve
- * a anclar el cerdo a la rejilla (no se le deja moverse libremente).
+ * Historial de por que se llego a esta montura concreta:
+ *  - Un ArmorStand no es una montura "Steerable": Minecraft no envia ninguna
+ *    senal de las teclas WASD para monturas que no sean caballo/burro/mula/
+ *    camello/cerdo/strider/bote, sin importar la version del servidor.
+ *  - Se probo primero con un CERDO con silla, pero en Minecraft vanilla un
+ *    cerdo montado SOLO se mueve si el jinete lleva en la mano una "zanahoria
+ *    en un palo" (item especial) — sin ese item, WASD no le hace nada. Por
+ *    eso el jugador no podia moverse: no era un bug del plugin, era una
+ *    limitacion del propio juego para ese tipo de montura.
+ *  - Un CABALLO domado y ensillado SI se mueve directamente con WASD, sin
+ *    necesitar ningun item extra en la mano — de ahi el cambio.
+ *
+ * En cuanto se detecta hacia donde intenta moverse el caballo (VehicleMoveEvent,
+ * ver SnakeInputListener), se vuelve a anclar a su casilla en la rejilla: no se
+ * le deja moverse libremente, solo en pasos discretos (SnakeGame#tick).
+ *
+ * La montura se mantiene INVISIBLE a proposito: la identificacion visual de
+ * "de quien es cada serpiente" viene del bloque de lana de color que se ve en
+ * el tablero (la cabeza), no de la propia montura.
  *
  * Sigue sin haber campo delimitado (Etapa 2), comida/puntos (Etapa 3), ni
  * crecimiento de cola (Etapa 4).
@@ -61,8 +71,8 @@ public class SnakeGame {
     /** Cola de segmentos del cuerpo. Vacia por ahora, se usara en la Etapa 4. */
     private final Deque<Location> tail = new ArrayDeque<>();
 
-    /** Montura invisible (cerdo con silla) sobre la que viaja el jugador. */
-    private Pig mount;
+    /** Montura invisible (caballo domado y ensillado) sobre la que viaja el jugador. */
+    private Horse mount;
 
     private boolean active = false;
 
@@ -95,20 +105,20 @@ public class SnakeGame {
         mount.addPassenger(player);
     }
 
-    /** Crea el cerdo invisible con silla, decorado con lana del color de la serpiente. */
-    private Pig spawnMount(Location head) {
+    /** Crea el caballo invisible, domado y ensillado (para que responda a WASD sin items extra). */
+    private Horse spawnMount(Location head) {
         Location spawnAt = mountLocationFor(head);
-        return spawnAt.getWorld().spawn(spawnAt, Pig.class, pig -> {
-            pig.setAdult();
-            pig.setSaddle(true); // imprescindible para que sea "Steerable" y se pueda dirigir con WASD
-            pig.setInvisible(true);
-            pig.setGravity(false);
-            pig.setInvulnerable(true);
-            pig.setSilent(true);
-            pig.setCollidable(false);
-            pig.setPersistent(false);
-            pig.setBreed(false);
-            pig.getEquipment().setHelmet(new ItemStack(color.getWoolMaterial()));
+        return spawnAt.getWorld().spawn(spawnAt, Horse.class, horse -> {
+            horse.setAdult();
+            horse.setTamed(true);                 // imprescindible: un caballo no domado ignora al jinete
+            horse.getInventory().setSaddle(new ItemStack(Material.SADDLE)); // imprescindible para poder dirigirlo
+            horse.setInvisible(true);
+            horse.setGravity(false);
+            horse.setInvulnerable(true);
+            horse.setSilent(true);
+            horse.setCollidable(false);
+            horse.setPersistent(false);
+            horse.setJumpStrength(0.0); // evita que salte solo al pulsar espacio
         });
     }
 
@@ -120,7 +130,7 @@ public class SnakeGame {
     /**
      * Vuelve a anclar la montura a su posicion correcta en la rejilla. Se llama
      * desde SnakeInputListener justo despues de detectar hacia donde intento
-     * moverse el jugador, para impedir que el cerdo se desplace libremente
+     * moverse el jugador, para impedir que el caballo se desplace libremente
      * (solo debe moverse en pasos discretos, en el tick de movimiento).
      */
     public void reanchorMount() {
@@ -216,7 +226,7 @@ public class SnakeGame {
         return currentDirection;
     }
 
-    public Pig getMount() {
+    public Horse getMount() {
         return mount;
     }
 

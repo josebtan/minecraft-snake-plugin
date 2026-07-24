@@ -13,11 +13,11 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
 
 - Cada jugador tiene una serpiente cuya **cabeza** es un bloque de lana de un color
   distinto (rojo, azul, verde, etc.).
-- El jugador va **montado en una montura invisible** (un cerdo con silla,
-  decorado con lana del mismo color de su serpiente para poder identificarla
-  desde fuera) que flota justo encima de la cabeza. Al moverse la cabeza, la
+- El jugador va **montado en una montura invisible** (un caballo domado y
+  ensillado) que flota justo encima de la cabeza. Al moverse la cabeza, la
   montura se mueve con ella y el jugador viaja automaticamente, como si la
-  cabalgara.
+  cabalgara. La identificacion de color de cada serpiente viene del bloque de
+  lana de la cabeza (la montura es invisible a proposito).
 - La camara del jugador queda **fija en vista cenital** (mirando hacia abajo) y
   **bloqueada**: no se puede rotar ni cambiar hasta que termine la partida.
   ⚠️ Aviso tecnico: Minecraft no permite forzar la vista en tercera persona (F5)
@@ -39,10 +39,10 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
 
 - [x] **Etapa 1 — Movimiento del jugador y la cabeza de la serpiente.**
   Estructura base del proyecto (Maven + Paper API). El jugador va montado en un
-  cerdo invisible con silla (decorado con lana del color de su serpiente) que
-  viaja justo encima de la cabeza, con la camara fija en vista cenital y
-  bloqueada durante toda la partida, controlando el movimiento con las teclas
-  WASD. Incluye un comando temporal de pruebas: `/snakedebug start|stop`.
+  caballo invisible, domado y ensillado, que viaja justo encima de la cabeza,
+  con la camara fija en vista cenital y bloqueada durante toda la partida,
+  controlando el movimiento con las teclas WASD. Incluye un comando temporal de
+  pruebas: `/snakedebug start|stop`.
 - [ ] **Etapa 2 — Comandos y creacion del campo de juego.**
   Sistema de comandos definitivo (`/snake ...`) y delimitacion de una zona de
   juego (arena) donde la serpiente puede moverse, con paredes/limites.
@@ -88,6 +88,12 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 > Nota: en la Etapa 1 la serpiente no tiene todavia campo de juego delimitado,
 > comida, ni cola — solo se prueba el movimiento de la cabeza (y del jugador
 > montado sobre ella). El resto llega en las siguientes etapas.
+>
+> Nota sobre la montura: se probo primero con un cerdo con silla, pero en
+> Minecraft vanilla un cerdo montado SOLO se mueve si el jinete lleva en la
+> mano una "zanahoria en un palo" — sin ese item, WASD no le hace nada. Por
+> eso se cambio a un caballo domado y ensillado, que si responde a WASD
+> directamente sin necesitar ningun item extra.
 >
 > Nota sobre la version de Paper: el proyecto se quedo fijado en 1.20.4 porque
 > es la unica version que confirme que resuelve bien desde este entorno de

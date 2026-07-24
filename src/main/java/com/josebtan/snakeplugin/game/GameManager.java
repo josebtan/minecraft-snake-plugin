@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * movimiento que las hace avanzar.
  *
  * A diferencia de versiones anteriores, ya NO hay un bucle aparte "de camara"
- * que reteleporte al jugador cada tick de servidor: al ir montado en un cerdo
+ * que reteleporte al jugador cada tick de servidor: al ir montado en un caballo
  * invisible (ver SnakeGame), su posicion la resuelve el propio motor de
  * Minecraft de forma gratuita, y el bloqueo de vista se aplica de forma
  * reactiva en SnakeInputListener (solo cuando el jugador intenta mover la

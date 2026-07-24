@@ -4,7 +4,7 @@ import com.josebtan.snakeplugin.game.Direction;
 import com.josebtan.snakeplugin.game.GameManager;
 import com.josebtan.snakeplugin.game.SnakeGame;
 import org.bukkit.Location;
-import org.bukkit.entity.Pig;
+import org.bukkit.entity.Horse;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -17,12 +17,12 @@ import org.bukkit.event.vehicle.VehicleMoveEvent;
  * Traduce la entrada de teclado del jugador (WASD) en direcciones de
  * movimiento de su serpiente, y protege la partida en curso.
  *
- * Como el jugador va montado en un cerdo con silla (Steerable), al pulsar
- * WASD el propio Minecraft mueve un poco al cerdo en esa direccion: eso es lo
- * que detectamos via VehicleMoveEvent (API estable, sin necesidad de ninguna
- * version reciente de Paper). En cuanto detectamos la direccion, "anclamos"
- * de nuevo el cerdo a su casilla, para que no se desplace libremente: solo se
- * mueve en pasos discretos, a cargo de SnakeGame#tick.
+ * Como el jugador va montado en un caballo domado y ensillado (Steerable), al
+ * pulsar WASD el propio Minecraft mueve un poco al caballo en esa direccion:
+ * eso es lo que detectamos via VehicleMoveEvent (API estable, sin necesidad de
+ * ninguna version reciente de Paper). En cuanto detectamos la direccion,
+ * "anclamos" de nuevo el caballo a su casilla, para que no se desplace
+ * libremente: solo se mueve en pasos discretos, a cargo de SnakeGame#tick.
  */
 public class SnakeInputListener implements Listener {
 
@@ -34,14 +34,14 @@ public class SnakeInputListener implements Listener {
 
     @EventHandler
     public void onVehicleMove(VehicleMoveEvent event) {
-        if (!(event.getVehicle() instanceof Pig pig) || pig.getPassengers().isEmpty()) {
+        if (!(event.getVehicle() instanceof Horse horse) || horse.getPassengers().isEmpty()) {
             return;
         }
-        if (!(pig.getPassengers().get(0) instanceof Player player)) {
+        if (!(horse.getPassengers().get(0) instanceof Player player)) {
             return;
         }
         SnakeGame game = gameManager.getGame(player);
-        if (game == null || !game.isActive() || !pig.equals(game.getMount())) {
+        if (game == null || !game.isActive() || !horse.equals(game.getMount())) {
             return;
         }
 
@@ -55,7 +55,7 @@ public class SnakeInputListener implements Listener {
             gameManager.requestDirection(player, requested);
         }
 
-        // Evitamos que el cerdo se desplace libremente: siempre vuelve a su casilla.
+        // Evitamos que el caballo se desplace libremente: siempre vuelve a su casilla.
         game.reanchorMount();
     }
 
