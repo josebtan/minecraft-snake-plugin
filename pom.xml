@@ -16,7 +16,11 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>1.20.4-R0.1-SNAPSHOT</paper.version>
+        <!-- Necesitamos una build reciente de Paper porque usamos PlayerInputEvent para leer
+             las teclas WASD directamente (un ArmorStand no es "Steerable" como un caballo o
+             un cerdo, asi que sin esta API no hay forma de saber que tecla pulsa el jugador
+             mientras esta montado). -->
+        <paper.version>1.21.4-R0.1-SNAPSHOT</paper.version>
     </properties>
 
     <repositories>

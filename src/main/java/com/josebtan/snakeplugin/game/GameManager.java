@@ -10,13 +10,16 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Administra todas las partidas de snake activas en el servidor y los dos bucles
- * que las mantienen funcionando:
+ * Administra todas las partidas de snake activas en el servidor y el bucle de
+ * movimiento que las hace avanzar.
  *
- *  - Bucle de MOVIMIENTO (cada MOVE_INTERVAL_TICKS): hace avanzar una casilla a
- *    cada cabeza, aplicando la ultima direccion pedida por WASD.
- *  - Bucle de CAMARA (cada tick de servidor): vuelve a fijar la vista cenital del
- *    jugador, para que no pueda moverla libremente con el raton entre movimientos.
+ * A diferencia de versiones anteriores, ya NO hay un bucle aparte "de camara"
+ * que reteleporte al jugador cada tick de servidor: al ir montado en un
+ * ArmorStand (ver SnakeGame), su posicion la resuelve el propio motor de
+ * Minecraft de forma gratuita, y el bloqueo de vista se aplica de forma
+ * reactiva en SnakeInputListener (solo cuando el jugador intenta mover la
+ * camara), no en un bucle constante. Esto reduce bastante la carga sobre el
+ * servidor comparado con el enfoque anterior.
  */
 public class GameManager {
 
@@ -26,7 +29,6 @@ public class GameManager {
     private final Plugin plugin;
     private final Map<UUID, SnakeGame> games = new ConcurrentHashMap<>();
     private BukkitTask movementTask;
-    private BukkitTask cameraTask;
     private int nextColorIndex = 0;
 
     public GameManager(Plugin plugin) {
@@ -45,7 +47,7 @@ public class GameManager {
         game.start(player);
         games.put(id, game);
 
-        ensureLoopsRunning();
+        ensureLoopRunning();
         return game;
     }
 
@@ -56,7 +58,7 @@ public class GameManager {
             game.stop(player);
         }
         if (games.isEmpty()) {
-            stopLoops();
+            stopLoop();
         }
     }
 
@@ -76,46 +78,24 @@ public class GameManager {
         }
     }
 
-    private void ensureLoopsRunning() {
+    private void ensureLoopRunning() {
         if (movementTask == null) {
             movementTask = Bukkit.getScheduler()
                     .runTaskTimer(plugin, this::tickMovement, MOVE_INTERVAL_TICKS, MOVE_INTERVAL_TICKS);
         }
-        if (cameraTask == null) {
-            cameraTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickCameras, 1L, 1L);
-        }
     }
 
-    private void stopLoops() {
+    private void stopLoop() {
         if (movementTask != null) {
             movementTask.cancel();
             movementTask = null;
         }
-        if (cameraTask != null) {
-            cameraTask.cancel();
-            cameraTask = null;
-        }
     }
 
-    /** Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y al jugador que viaja con ella) una casilla. */
+    /** Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y su montura, con el jugador encima) una casilla. */
     private void tickMovement() {
         for (SnakeGame game : games.values()) {
-            Player player = Bukkit.getPlayer(game.getPlayerId());
-            if (player == null || !player.isOnline()) {
-                continue;
-            }
-            game.tick(player);
-        }
-    }
-
-    /** Se ejecuta cada tick: reafirma la posicion y vista cenital bloqueadas de cada jugador. */
-    private void tickCameras() {
-        for (SnakeGame game : games.values()) {
-            Player player = Bukkit.getPlayer(game.getPlayerId());
-            if (player == null || !player.isOnline()) {
-                continue;
-            }
-            game.enforceLock(player);
+            game.tick();
         }
     }
 
@@ -123,11 +103,9 @@ public class GameManager {
     public void stopAll() {
         for (SnakeGame game : games.values()) {
             Player player = Bukkit.getPlayer(game.getPlayerId());
-            if (player != null) {
-                game.stop(player);
-            }
+            game.stop(player);
         }
         games.clear();
-        stopLoops();
+        stopLoop();
     }
 }
