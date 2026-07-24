@@ -17,7 +17,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- DIAGNOSTICO: probando si esta version concreta de Paper existe en su repositorio. -->
-        <paper.version>1.21.4-R0.1-SNAPSHOT</paper.version>
+        <paper.version>1.21.1-R0.1-SNAPSHOT</paper.version>
     </properties>
 
     <repositories>
