@@ -39,6 +39,17 @@
             <version>${paper.version}</version>
             <scope>provided</scope>
         </dependency>
+        <!-- Compilamos contra la version estable de Maven Central. En el servidor real
+             se puede usar una build de ProtocolLib mas reciente (incluso una dev build):
+             la API basica que usamos (PacketAdapter, PacketType.Play.Client.STEER_VEHICLE)
+             lleva años estable, asi que una version de runtime mas nueva deberia ser
+             compatible con lo compilado aqui. -->
+        <dependency>
+            <groupId>net.dmulloy2</groupId>
+            <artifactId>ProtocolLib</artifactId>
+            <version>5.4.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>

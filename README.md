@@ -11,22 +11,20 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
 
 ## ¿Como se juega? (idea general)
 
-- Cada jugador tiene una serpiente cuya **cabeza** es un bloque de lana de un color
-  distinto (rojo, azul, verde, etc.).
-- El jugador va **montado en una montura invisible** (un caballo domado y
-  ensillado) que flota justo encima de la cabeza. Al moverse la cabeza, la
-  montura se mueve con ella y el jugador viaja automaticamente, como si la
-  cabalgara. La identificacion de color de cada serpiente viene del bloque de
-  lana de la cabeza (la montura es invisible a proposito).
-- La camara del jugador queda **fija en vista cenital** (mirando hacia abajo) y
-  **bloqueada**: no se puede rotar ni cambiar hasta que termine la partida.
-  ⚠️ Aviso tecnico: Minecraft no permite forzar la vista en tercera persona (F5)
-  desde el servidor, esa tecla es exclusiva del cliente. Lo que si se bloquea es
-  la direccion de la camara (mirando siempre hacia abajo), consiguiendo el efecto
-  de "vista de pajaro" tipico de un Snake visto desde arriba.
-- La serpiente se mueve sola, casilla a casilla, sobre una rejilla horizontal fija
-  (una "Y" concreta del mundo), y el jugador la dirige con las **teclas de
-  movimiento (WASD)**: W = Norte, S = Sur, A = Oeste, D = Este.
+- Cada jugador tiene una serpiente cuya **cabeza** es un bloque de lana **real y
+  visible** de un color distinto (rojo, azul, verde, etc.), que se mueve por el
+  mundo casilla a casilla.
+- El jugador aparece **sentado justo encima** de ese bloque (montado en un
+  asiento invisible pegado a el), y viaja automaticamente con la cabeza en cada
+  movimiento — como si estuviera sentado en un carrito de minas siguiendo la
+  via.
+- La camara del jugador es **libre**: puede mirar a su alrededor con
+  normalidad mientras viaja, no hay ningun bloqueo de vista.
+- El jugador la dirige con las **teclas de movimiento (WASD)**. Estas se leen
+  con la ayuda del plugin **[ProtocolLib](https://github.com/dmulloy2/ProtocolLib)**
+  (ver la seccion de dependencias mas abajo): es necesario porque, estando
+  sentado en una entidad invisible normal, Minecraft no ofrece ninguna forma
+  nativa de saber que tecla pulsa el jugador.
 - Al pasar sobre un bloque de comida, la serpiente **crece**: se anade un nuevo
   bloque a la cola, que sigue el recorrido exacto que hizo la cabeza (igual que en
   el Snake clasico).
@@ -38,10 +36,10 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
 El desarrollo esta dividido en 4 etapas, tal y como se planifico:
 
 - [x] **Etapa 1 — Movimiento del jugador y la cabeza de la serpiente.**
-  Estructura base del proyecto (Maven + Paper API). El jugador va montado en un
-  caballo invisible, domado y ensillado, que viaja justo encima de la cabeza,
-  con la camara fija en vista cenital y bloqueada durante toda la partida,
-  controlando el movimiento con las teclas WASD. Incluye un comando temporal de
+  Estructura base del proyecto (Maven + Paper API). La cabeza es un bloque de
+  lana real que se mueve por el mundo; el jugador aparece sentado justo
+  encima (asiento invisible), con la camara libre, controlando el movimiento
+  con las teclas WASD (leidas via ProtocolLib). Incluye un comando temporal de
   pruebas: `/snakedebug start|stop`.
 - [ ] **Etapa 2 — Comandos y creacion del campo de juego.**
   Sistema de comandos definitivo (`/snake ...`) y delimitacion de una zona de
@@ -60,6 +58,19 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
 - Maven 3.8+
 - Un servidor [Paper](https://papermc.io/) 1.20.x para probar el plugin
 
+## Dependencias en el servidor
+
+Ademas de `SnakePlugin`, tu servidor necesita tener instalado
+**[ProtocolLib](https://www.spigotmc.org/resources/protocollib.1997/)** en su
+carpeta `plugins/` (es una dependencia obligatoria — SnakePlugin no arrancara
+sin ella, ver `depend: [ProtocolLib]` en `plugin.yml`).
+
+⚠️ Si tu servidor usa una version de Paper muy reciente, puede que necesites
+una **build de desarrollo** de ProtocolLib en vez de la version estable
+publicada en Spigot — la propia pagina de ProtocolLib indica para que rango de
+versiones hace falta la dev build. Revisa las builds mas recientes en su
+[Jenkins](https://ci.dmulloy2.net/job/ProtocolLib/) o su hilo de Spigot.
+
 ## Como compilar
 
 ```bash
@@ -74,26 +85,37 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 
 ## Probar la Etapa 1
 
-1. Compila el plugin y colocalo en `plugins/` de un servidor Paper 1.20.x.
+1. Compila el plugin y colocalo en `plugins/` de un servidor Paper, junto con
+   **ProtocolLib** (ver seccion de dependencias mas arriba — imprescindible).
 2. Inicia el servidor y entra con un jugador.
-3. Ejecuta `/snakedebug start`: apareceras montado en el aire, por encima de un
-   bloque de lana de color, con la camara mirando hacia abajo (fija, no la puedes
-   mover con el raton).
-4. Usa **W / A / S / D**: cada tecla mueve la serpiente en una direccion distinta
-   de la rejilla. Te desplazaras junto con la cabeza automaticamente al ir
-   montado.
-5. Ejecuta `/snakedebug stop` para bajarte, detener la partida y recuperar el
-   control normal de tu camara.
+3. Ejecuta `/snakedebug start`: apareceras sentado justo encima de un bloque
+   de lana de color. Tu camara es libre, puedes mirar a tu alrededor con
+   normalidad.
+4. Usa **W / A / S / D**: cada tecla mueve la serpiente en una direccion
+   distinta de la rejilla. Te desplazaras junto con la cabeza automaticamente
+   al ir sentado sobre ella.
+5. Ejecuta `/snakedebug stop` para levantarte y detener la partida.
 
 > Nota: en la Etapa 1 la serpiente no tiene todavia campo de juego delimitado,
 > comida, ni cola — solo se prueba el movimiento de la cabeza (y del jugador
-> montado sobre ella). El resto llega en las siguientes etapas.
+> sentado sobre ella). El resto llega en las siguientes etapas.
 >
-> Nota sobre la montura: se probo primero con un cerdo con silla, pero en
-> Minecraft vanilla un cerdo montado SOLO se mueve si el jinete lleva en la
-> mano una "zanahoria en un palo" — sin ese item, WASD no le hace nada. Por
-> eso se cambio a un caballo domado y ensillado, que si responde a WASD
-> directamente sin necesitar ningun item extra.
+> Historial de decisiones de diseño para el movimiento/monta:
+> 1. Se probo mover al jugador solo mirando alrededor (sin WASD, sin sentarse).
+> 2. Se probo tele-transportar al jugador cada tick para simular que "viajaba"
+>    con la cabeza — funcionaba, pero era pesado para el servidor y peleaba
+>    contra los intentos de movimiento del propio jugador.
+> 3. Se probo montarlo en un cerdo con silla (Steerable) — pero un cerdo
+>    montado en Minecraft vanilla SOLO se mueve si el jinete lleva en la mano
+>    una "zanahoria en un palo"; sin ese item, WASD no le hace nada.
+> 4. Se probo un caballo domado y ensillado (si responde a WASD sin item
+>    extra) — funcionaba, pero quedaba visualmente desconectado del bloque de
+>    lana (flotaba muy por encima del tablero).
+> 5. Version actual: el bloque de lana vuelve a ser el protagonista visual, el
+>    jugador se sienta justo encima (asiento invisible), y las teclas WASD se
+>    leen con **ProtocolLib** interceptando el paquete de red que el cliente
+>    envia siempre que estas montado en cualquier entidad — funciona sin
+>    importar si esa entidad es "Steerable" o no.
 >
 > Nota sobre la version de Paper: el proyecto se quedo fijado en 1.20.4 porque
 > es la unica version que confirme que resuelve bien desde este entorno de

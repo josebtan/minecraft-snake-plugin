@@ -13,10 +13,11 @@ import org.bukkit.entity.Player;
  * con creacion de campo de juego, union a partidas, etc.
  *
  * Uso:
- *   /snakedebug start  -> crea tu serpiente (cabeza) en tu posicion, te monta en
- *                         una montura invisible sobre ella con la camara fija en
- *                         vista cenital, y la controlas con las teclas WASD
- *   /snakedebug stop   -> te baja de la montura, detiene y elimina tu serpiente
+ *   /snakedebug start  -> crea tu serpiente: un bloque de lana real que se
+ *                         mueve por el mundo, con un asiento invisible encima
+ *                         en el que apareces sentado. Camara libre, la
+ *                         controlas con W/A/S/D
+ *   /snakedebug stop   -> te levanta del asiento, detiene y elimina tu serpiente
  */
 public class SnakeDebugCommand implements CommandExecutor {
 
@@ -45,7 +46,7 @@ public class SnakeDebugCommand implements CommandExecutor {
                     return true;
                 }
                 gameManager.startGame(player);
-                player.sendMessage(Component.text("Serpiente creada. Usa W/A/S/D para dirigirla. Tu camara quedara fija hasta que uses /snakedebug stop."));
+                player.sendMessage(Component.text("Serpiente creada. Usa W/A/S/D para dirigirla."));
             }
             case "stop" -> {
                 if (!gameManager.hasGame(player)) {

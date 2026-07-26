@@ -14,12 +14,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * movimiento que las hace avanzar.
  *
  * A diferencia de versiones anteriores, ya NO hay un bucle aparte "de camara"
- * que reteleporte al jugador cada tick de servidor: al ir montado en un caballo
- * invisible (ver SnakeGame), su posicion la resuelve el propio motor de
- * Minecraft de forma gratuita, y el bloqueo de vista se aplica de forma
- * reactiva en SnakeInputListener (solo cuando el jugador intenta mover la
- * camara), no en un bucle constante. Esto reduce bastante la carga sobre el
- * servidor comparado con el enfoque anterior.
+ * que reteleporte al jugador cada tick de servidor: al ir sentado en un
+ * ArmorStand invisible pegado al bloque de la cabeza (ver SnakeGame), su
+ * posicion la resuelve el propio motor de Minecraft de forma gratuita al
+ * mover el asiento, y la camara del jugador queda completamente libre (sin
+ * bloqueo). Esto reduce bastante la carga sobre el servidor comparado con el
+ * primer enfoque (tele-transportar al jugador 20 veces por segundo).
  */
 public class GameManager {
 
@@ -92,7 +92,7 @@ public class GameManager {
         }
     }
 
-    /** Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y su montura, con el jugador encima) una casilla. */
+    /** Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y su asiento, con el jugador encima) una casilla. */
     private void tickMovement() {
         for (SnakeGame game : games.values()) {
             game.tick();

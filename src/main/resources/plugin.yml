@@ -4,6 +4,7 @@ main: com.josebtan.snakeplugin.SnakePlugin
 api-version: '1.20'
 author: josebtan
 description: Clasico juego de Snake para Minecraft, multijugador, con bloques de lana de colores.
+depend: [ProtocolLib]
 
 commands:
   snakedebug:

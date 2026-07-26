@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin;
 import com.josebtan.snakeplugin.command.SnakeDebugCommand;
 import com.josebtan.snakeplugin.game.GameManager;
 import com.josebtan.snakeplugin.listener.SnakeInputListener;
+import com.josebtan.snakeplugin.listener.SnakeSteerPacketListener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -24,8 +25,9 @@ public final class SnakePlugin extends JavaPlugin {
         }
 
         getServer().getPluginManager().registerEvents(new SnakeInputListener(gameManager), this);
+        new SnakeSteerPacketListener(this, gameManager).register();
 
-        getLogger().info("SnakePlugin habilitado (Etapa 1: jugador montado en caballo invisible, camara cenital fija, control WASD).");
+        getLogger().info("SnakePlugin habilitado (Etapa 1: bloque de lana real como cabeza, jugador sentado encima, camara libre, control WASD via ProtocolLib).");
     }
 
     @Override
