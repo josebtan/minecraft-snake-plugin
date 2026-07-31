@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin.command;
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.game.GameManager;
+import com.josebtan.snakeplugin.gui.ArenaListMenuHolder;
 import com.josebtan.snakeplugin.gui.SnakeGuiMenus;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.Command;
@@ -18,12 +19,15 @@ import java.util.List;
  * Comando definitivo del plugin (Etapa 2). Reemplaza al temporal /snakedebug de la Etapa 1.
  *
  * Uso:
+ *   /snake arena                   -> abre el panel de creacion/administracion (GUI)
+ *   /snake arena menu              -> lo mismo, explicito
  *   /snake arena pos1              -> marca la esquina 1 de la arena (donde estas parado)
  *   /snake arena pos2              -> marca la esquina 2
  *   /snake arena create <nombre>   -> construye la arena entre pos1 y pos2 (se guarda en disco)
  *   /snake arena delete <nombre>   -> elimina esa arena (se guarda en disco)
- *   /snake arena list              -> lista las arenas creadas
- *   /snake join <arena>            -> abre el menu para unirte a esa arena (modo -> color)
+ *   /snake arena list              -> lista las arenas creadas (texto)
+ *   /snake join                    -> abre el menu para elegir arena (GUI), luego modo -> color
+ *   /snake join <arena>            -> salta directo al menu de modo para esa arena
  *   /snake leave                   -> te levanta y elimina tu serpiente
  *
  * Sigue sin haber comida/puntos (Etapa 3) ni crecimiento de cola (Etapa 4).
@@ -65,11 +69,12 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            player.sendMessage(Component.text("Uso: /snake arena <pos1|pos2|create <nombre>|delete <nombre>|list>"));
+            SnakeGuiMenus.openArenaCreateMenu(player, arenaManager);
             return;
         }
 
         switch (args[1].toLowerCase()) {
+            case "menu" -> SnakeGuiMenus.openArenaCreateMenu(player, arenaManager);
             case "pos1" -> {
                 arenaManager.setPos1(player, player.getLocation());
                 player.sendMessage(Component.text("Esquina 1 marcada en tu posicion."));
@@ -117,14 +122,16 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleJoin(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage(Component.text("Uso: /snake join <arena>"));
-            return;
-        }
         if (gameManager.hasGame(player)) {
             player.sendMessage(Component.text("Ya tienes una serpiente activa. Usa /snake leave primero."));
             return;
         }
+
+        if (args.length < 2) {
+            SnakeGuiMenus.openArenaListMenu(player, arenaManager, ArenaListMenuHolder.Mode.JOIN);
+            return;
+        }
+
         Arena arena = arenaManager.getArena(args[1]);
         if (arena == null) {
             player.sendMessage(Component.text("No existe ninguna arena con ese nombre. Usa /snake arena list."));
@@ -150,6 +157,7 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             options.add("join");
             options.add("leave");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("arena")) {
+            options.add("menu");
             options.add("pos1");
             options.add("pos2");
             options.add("create");

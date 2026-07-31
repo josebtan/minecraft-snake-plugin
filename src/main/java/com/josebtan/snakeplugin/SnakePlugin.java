@@ -31,7 +31,7 @@ public final class SnakePlugin extends JavaPlugin {
         }
 
         getServer().getPluginManager().registerEvents(new SnakeInputListener(gameManager), this);
-        getServer().getPluginManager().registerEvents(new SnakeGuiListener(gameManager), this);
+        getServer().getPluginManager().registerEvents(new SnakeGuiListener(gameManager, arenaManager), this);
         new SnakeSteerPacketListener(this, gameManager).register();
 
         getLogger().info("SnakePlugin habilitado (Etapa 2: arenas persistentes + menu de modo/color + comando /snake).");

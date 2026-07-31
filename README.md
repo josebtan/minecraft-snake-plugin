@@ -46,16 +46,24 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   WorldEdit — solo registran DONDE puede aparecer la serpiente (y, en la
   Etapa 3, la comida); no construyen nada, cada quien decora/delimita su
   arena a mano. **Las arenas se guardan en disco** (`arenas.yml`) y se
-  recargan solas al reiniciar el servidor; `/snake arena delete <nombre>`
-  las elimina. Unirse a una arena abre un **menu (GUI)** de dos pasos: elegir
-  modo (un jugador / multijugador) y despues elegir color de lana — en modo
-  multijugador, los colores que ya este usando otro jugador activo en esa
-  misma arena aparecen bloqueados. La deteccion de choques ya funciona: antes
-  de mover la cabeza se revisa si el bloque de destino es aire; si no lo es
-  (algo que el jugador construyo, o mas adelante la cola propia/ajena), la
-  partida termina ahi mismo. El punto de aparicion es aleatorio dentro de la
-  arena, verificando que haya espacio libre por delante para no chocar nada
-  mas entrar.
+  recargan solas al reiniciar el servidor.
+  Todo el flujo tiene menus (GUI), no solo comandos de texto:
+  - `/snake arena` (o `/snake arena menu`) abre un **panel de
+    creacion/administracion**: marcar esquina 1/2 con un clic (en tu
+    posicion actual), crear (te pide el nombre con un truco de "yunque
+    falso" — el cuadro de texto nativo de renombrar, sin gastar experiencia
+    ni materiales), ver la lista, o eliminar una.
+  - `/snake join` (sin nombre) abre un **listado de arenas existentes**
+    para elegir con un clic.
+  - Elegir una arena (desde el listado o con `/snake join <nombre>`) abre el
+    menu de **modo** (un jugador / multijugador) y despues el de **color**
+    de lana — en modo multijugador, los colores que ya este usando otro
+    jugador activo en esa misma arena aparecen bloqueados.
+  La deteccion de choques ya funciona: antes de mover la cabeza se revisa si
+  el bloque de destino es aire; si no lo es (algo que el jugador construyo,
+  o mas adelante la cola propia/ajena), la partida termina ahi mismo. El
+  punto de aparicion es aleatorio dentro de la arena, verificando que haya
+  espacio libre por delante para no chocar nada mas entrar.
 - [ ] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
   Generacion aleatoria de comida dentro del campo y sistema de puntuacion.
   La deteccion de choques de la Etapa 2 habra que ampliarla: en vez de tratar
@@ -103,25 +111,34 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 2. Inicia el servidor y entra con un jugador que tenga permiso de operador
    (hace falta para crear arenas — permiso `snakeplugin.arena.admin`, por
    defecto solo `op`).
-3. Parate en una esquina de la zona donde quieras el campo de juego y ejecuta
-   `/snake arena pos1`. Ve hasta la esquina opuesta y ejecuta `/snake arena pos2`.
-4. Ejecuta `/snake arena create <nombre>` (por ejemplo `/snake arena create
-   arena1`): esto solo registra el rectangulo (y lo guarda en disco), no toca
-   ningun bloque. Si quieres delimitar visualmente la zona (paredes,
-   decoracion, lo que sea), construyelo tu mismo con normalidad — esos
-   bloques funcionaran igual como obstaculos para la serpiente.
-5. Cualquier jugador ejecuta `/snake join <nombre>`: se abre un menu para
-   elegir **Un jugador** o **Multijugador**, y despues otro para elegir el
-   **color** de lana de su serpiente (en modo multijugador, los colores ya
-   usados por otros jugadores activos en esa arena aparecen con un bloque de
-   barrera, no seleccionables). Al elegir color, aparece sentado sobre la
-   cabeza de su serpiente, en un punto aleatorio libre dentro de la arena.
-   Camara libre, se controla con **W / A / S / D**.
+3. Ejecuta `/snake arena` (o `/snake arena menu`): se abre el **panel de
+   creacion**. Parate en una esquina de la zona donde quieras el campo de
+   juego y haz clic en "Marcar esquina 1" (se marca en tu posicion actual);
+   ve hasta la esquina opuesta, vuelve a abrir el panel y haz clic en
+   "Marcar esquina 2". Una vez marcadas ambas, haz clic en "Crear arena": se
+   abre un **yunque falso** donde escribes el nombre (usando el cuadro de
+   texto nativo de renombrar) y confirmas haciendo clic en el resultado. Solo
+   registra el rectangulo (y lo guarda en disco), no toca ningun bloque. Si
+   quieres delimitar visualmente la zona (paredes, decoracion, lo que sea),
+   construyelo tu mismo con normalidad — esos bloques funcionaran igual como
+   obstaculos para la serpiente.
+4. Cualquier jugador ejecuta `/snake join` (sin nombre): se abre un
+   **listado de arenas existentes** para elegir una con un clic. (Tambien
+   puedes ir directo con `/snake join <nombre>` si ya sabes el nombre.)
+5. Al elegir arena, se abre un menu para elegir **Un jugador** o
+   **Multijugador**, y despues otro para elegir el **color** de lana de su
+   serpiente (en modo multijugador, los colores ya usados por otros
+   jugadores activos en esa arena aparecen con un bloque de barrera, no
+   seleccionables). Al elegir color, aparece sentado sobre la cabeza de su
+   serpiente, en un punto aleatorio libre dentro de la arena. Camara libre,
+   se controla con **W / A / S / D**.
 6. Si la cabeza choca contra algo solido (o, en etapas futuras, contra una
    cola), la partida termina automaticamente y se avisa al jugador.
 7. `/snake leave` para levantarse y detener la partida manualmente.
-8. `/snake arena list` lista las arenas ya creadas; `/snake arena delete
-   <nombre>` elimina una (tambien se guarda en disco).
+8. Desde el panel (`/snake arena menu`), el boton "Eliminar arena" abre el
+   mismo listado pero en modo eliminar (un clic la borra, tambien en disco).
+   El boton "Ver arenas" abre el listado normal (para unirte). El comando de
+   texto `/snake arena list` sigue disponible como atajo rapido.
 9. Reinicia el servidor y comprueba que las arenas siguen ahi con
    `/snake arena list` — se cargan solas desde `arenas.yml` al arrancar.
 
