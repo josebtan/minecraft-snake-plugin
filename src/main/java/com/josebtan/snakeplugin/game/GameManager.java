@@ -1,5 +1,7 @@
 package com.josebtan.snakeplugin.game;
 
+import com.josebtan.snakeplugin.arena.Arena;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -20,6 +22,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * mover el asiento, y la camara del jugador queda completamente libre (sin
  * bloqueo). Esto reduce bastante la carga sobre el servidor comparado con el
  * primer enfoque (tele-transportar al jugador 20 veces por segundo).
+ *
+ * ETAPA 2: startGame ahora exige una Arena (campo delimitado), y el bucle de
+ * movimiento termina automaticamente la partida de cualquier jugador cuya
+ * serpiente choque (ver SnakeGame#tick).
  */
 public class GameManager {
 
@@ -35,8 +41,8 @@ public class GameManager {
         this.plugin = plugin;
     }
 
-    /** Crea e inicia una partida nueva para el jugador, si no tiene ya una activa. */
-    public SnakeGame startGame(Player player) {
+    /** Crea e inicia una partida nueva para el jugador dentro de la arena dada, si no tiene ya una activa. */
+    public SnakeGame startGame(Player player, Arena arena) {
         UUID id = player.getUniqueId();
         if (games.containsKey(id)) {
             return games.get(id);
@@ -44,14 +50,14 @@ public class GameManager {
 
         SnakeColor color = SnakeColor.byIndex(nextColorIndex++);
         SnakeGame game = new SnakeGame(id, color);
-        game.start(player);
+        game.start(player, arena);
         games.put(id, game);
 
         ensureLoopRunning();
         return game;
     }
 
-    /** Detiene y elimina la partida del jugador, si existe. */
+    /** Detiene y elimina la partida del jugador, si existe (salida voluntaria). */
     public void stopGame(Player player) {
         SnakeGame game = games.remove(player.getUniqueId());
         if (game != null) {
@@ -92,10 +98,26 @@ public class GameManager {
         }
     }
 
-    /** Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y su asiento, con el jugador encima) una casilla. */
+    /**
+     * Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y su asiento, con el jugador
+     * encima) una casilla. Si SnakeGame#tick() devuelve false, esa serpiente acaba de
+     * chocar: se termina su partida aqui mismo (limpieza + aviso al jugador).
+     */
     private void tickMovement() {
         for (SnakeGame game : games.values()) {
-            game.tick();
+            boolean alive = game.tick();
+            if (!alive) {
+                UUID id = game.getPlayerId();
+                games.remove(id);
+                Player player = Bukkit.getPlayer(id);
+                game.stop(player);
+                if (player != null) {
+                    player.sendMessage(Component.text("¡Chocaste! Tu serpiente ha muerto."));
+                }
+            }
+        }
+        if (games.isEmpty()) {
+            stopLoop();
         }
     }
 

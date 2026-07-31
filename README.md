@@ -39,18 +39,22 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   Estructura base del proyecto (Maven + Paper API). La cabeza es un bloque de
   lana real que se mueve por el mundo; el jugador aparece sentado justo
   encima (asiento invisible), con la camara libre, controlando el movimiento
-  con las teclas WASD (leidas via ProtocolLib). Incluye un comando temporal de
-  pruebas: `/snakedebug start|stop`.
-- [ ] **Etapa 2 — Comandos y creacion del campo de juego.**
-  Sistema de comandos definitivo (`/snake ...`) y delimitacion de una zona de
-  juego (arena) donde la serpiente puede moverse, con paredes/limites.
+  con las teclas WASD (leidas via ProtocolLib).
+- [x] **Etapa 2 — Comandos y creacion del campo de juego.**
+  Comando definitivo `/snake ...` (reemplaza al `/snakedebug` temporal de la
+  Etapa 1). Las arenas (campo de juego) se delimitan marcando dos esquinas al
+  estilo WorldEdit; al crearlas se levantan paredes solidas alrededor. La
+  deteccion de choques ya funciona: antes de mover la cabeza se revisa si el
+  bloque de destino es aire; si no lo es (pared de la arena, o mas adelante
+  la cola propia/ajena), la partida termina ahi mismo.
 - [ ] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
-  Generacion aleatoria de comida dentro del campo, sistema de puntuacion, y
-  condiciones de fin de partida (colision con el borde).
+  Generacion aleatoria de comida dentro del campo y sistema de puntuacion.
+  La deteccion de choques de la Etapa 2 habra que ampliarla: en vez de tratar
+  cualquier bloque no-aire como choque, primero revisar si es comida/power-up.
 - [ ] **Etapa 4 — Mecanica de movimiento y crecimiento de la cola.**
   La cola sigue exactamente el recorrido de la cabeza y crece al comer,
   incluyendo la deteccion de colision contra la propia cola / la de otros
-  jugadores.
+  jugadores (usando el mismo chequeo de "bloque no-aire" de la Etapa 2).
 
 ## Requisitos para compilar
 
@@ -83,24 +87,31 @@ servidor Paper. El repositorio tambien incluye un workflow de GitHub Actions
 push, para que puedas descargar el `.jar` sin necesidad de tener Maven instalado
 localmente (pestaña **Actions** del repositorio → build → Artifacts).
 
-## Probar la Etapa 1
+## Probar la Etapa 2
 
 1. Compila el plugin y colocalo en `plugins/` de un servidor Paper, junto con
    **ProtocolLib** (ver seccion de dependencias mas arriba — imprescindible).
-2. Inicia el servidor y entra con un jugador.
-3. Ejecuta `/snakedebug start`: apareceras sentado justo encima de un bloque
-   de lana de color. Tu camara es libre, puedes mirar a tu alrededor con
-   normalidad.
-4. Usa **W / A / S / D**: cada tecla mueve la serpiente en una direccion
-   distinta de la rejilla. Te desplazaras junto con la cabeza automaticamente
-   al ir sentado sobre ella.
-5. Ejecuta `/snakedebug stop` para levantarte y detener la partida.
+2. Inicia el servidor y entra con un jugador que tenga permiso de operador
+   (hace falta para crear arenas — permiso `snakeplugin.arena.admin`, por
+   defecto solo `op`).
+3. Parate en una esquina de la zona donde quieras el campo de juego y ejecuta
+   `/snake arena pos1`. Ve hasta la esquina opuesta y ejecuta `/snake arena pos2`.
+4. Ejecuta `/snake arena create <nombre>` (por ejemplo `/snake arena create
+   arena1`): se limpia el interior y se levantan paredes solidas alrededor
+   del rectangulo marcado.
+5. Cualquier jugador ejecuta `/snake join <nombre>` para aparecer sentado
+   sobre la cabeza de su serpiente, en el centro de esa arena. Camara libre,
+   se controla con **W / A / S / D**.
+6. Si la cabeza choca contra una pared (o, en etapas futuras, contra una
+   cola), la partida termina automaticamente y se avisa al jugador.
+7. `/snake leave` para levantarse y detener la partida manualmente.
+8. `/snake arena list` lista las arenas ya creadas.
 
-> Nota: en la Etapa 1 la serpiente no tiene todavia campo de juego delimitado,
-> comida, ni cola — solo se prueba el movimiento de la cabeza (y del jugador
-> sentado sobre ella). El resto llega en las siguientes etapas.
+> Nota: las arenas se guardan solo en memoria por ahora — se pierden al
+> reiniciar el servidor y hay que volver a crearlas. Persistirlas en disco
+> queda pendiente para una etapa futura.
 >
-> Historial de decisiones de diseño para el movimiento/monta:
+> Historial de decisiones de diseño para el movimiento/monta (Etapa 1):
 > 1. Se probo mover al jugador solo mirando alrededor (sin WASD, sin sentarse).
 > 2. Se probo tele-transportar al jugador cada tick para simular que "viajaba"
 >    con la cabeza — funcionaba, pero era pesado para el servidor y peleaba
@@ -117,10 +128,18 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 >    envia siempre que estas montado en cualquier entidad — funciona sin
 >    importar si esa entidad es "Steerable" o no.
 >
-> Nota sobre la version de Paper: el proyecto se quedo fijado en 1.20.4 porque
-> es la unica version que confirme que resuelve bien desde este entorno de
-> desarrollo. PaperMC parece haber cambiado su esquema de versionado en algun
-> momento posterior (sus tags de GitHub saltan de "1.21.11" a "26.1.2"), asi
-> que si quieres apuntar el plugin a una version de servidor mas reciente,
-> dime la version exacta que usas y confirmamos juntos las coordenadas Maven
-> correctas (o revisa https://papermc.io/downloads / su documentacion).
+> Nota sobre el paquete de input y la version de Minecraft: desde 1.21.4,
+> Mojang cambio por completo el formato de este paquete (paso de dos floats
+> sueltos a un record anidado de 7 booleanos). ProtocolLib no siempre lo
+> desempaqueta solo, asi que `SnakeSteerPacketListener` prueba varios
+> formatos en cascada (floats -> booleans -> reflexion cruda sobre el
+> paquete NMS) para funcionar sin importar cual de los dos formatos use tu
+> servidor.
+>
+> Nota sobre la version de Paper: el proyecto se quedo fijado en 1.20.4 en el
+> `pom.xml` porque es la unica version que confirme que resuelve bien desde
+> este entorno de desarrollo, pero el plugin ya se probo funcionando en
+> servidores reales bastante mas nuevos (ver nota anterior). Si quieres subir
+> tambien la version de Paper del `pom.xml`, dime la version exacta que usas
+> y confirmamos juntos las coordenadas Maven correctas (o revisa
+> https://papermc.io/downloads / su documentacion).

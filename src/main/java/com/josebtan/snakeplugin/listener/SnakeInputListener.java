@@ -26,7 +26,7 @@ public class SnakeInputListener implements Listener {
     /**
      * Evita que el jugador se baje voluntariamente (con Shift) del asiento
      * mientras la partida sigue activa. Cuando SI queremos que se baje (al
-     * terminar la partida con /snakedebug stop), SnakeGame#stop pone 'active'
+     * terminar la partida con /snake leave), SnakeGame#stop pone 'active'
      * a false ANTES de expulsarlo, por lo que este listener lo deja pasar.
      */
     @EventHandler

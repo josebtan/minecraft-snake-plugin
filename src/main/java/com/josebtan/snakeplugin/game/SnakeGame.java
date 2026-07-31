@@ -1,5 +1,6 @@
 package com.josebtan.snakeplugin.game;
 
+import com.josebtan.snakeplugin.arena.Arena;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.ArmorStand;
@@ -13,24 +14,18 @@ import java.util.UUID;
  * Representa la partida de un jugador: su serpiente, posicion de la cabeza,
  * direccion actual y (en etapas futuras) su cola y puntuacion.
  *
- * ETAPA 1 (version 7): de vuelta al diseño original — la cabeza es un bloque de
- * lana REAL y visible que se mueve por el tablero. El jugador se "sienta" justo
- * encima de ese bloque, montado en un ArmorStand invisible que viaja pegado a
- * el en cada movimiento.
+ * ETAPA 2: la partida ahora vive dentro de una Arena (campo delimitado por paredes —
+ * ver com.josebtan.snakeplugin.arena.Arena), en vez de moverse libremente por el mundo
+ * como en la Etapa 1. La cabeza sigue siendo un bloque de lana REAL y visible; el jugador
+ * se "sienta" justo encima, montado en un ArmorStand invisible que viaja pegado a el.
  *
  * La camara del jugador queda LIBRE (sin bloqueo cenital): puede mirar a su
  * alrededor con normalidad mientras viaja, como si estuviera sentado en un
  * carrito de minas.
  *
- * Las teclas WASD se leen con ProtocolLib (ver SnakeSteerPacketListener),
- * interceptando el paquete "Steer Vehicle" que el cliente envia SIEMPRE que el
- * jugador esta montado en cualquier entidad (no solo en monturas "oficiales"
- * como caballos): es la unica forma fiable de detectar las teclas sin depender
- * de que la entidad sea "Steerable", y sin apostar por APIs muy recientes de
- * Paper que ya nos dieron problemas antes.
+ * Las teclas WASD se leen con ProtocolLib (ver SnakeSteerPacketListener).
  *
- * Sigue sin haber campo delimitado (Etapa 2), comida/puntos (Etapa 3), ni
- * crecimiento de cola (Etapa 4).
+ * Sigue sin haber comida/puntos (Etapa 3) ni crecimiento de cola (Etapa 4).
  */
 public class SnakeGame {
 
@@ -43,20 +38,19 @@ public class SnakeGame {
      * interno del ArmorStand.
      *
      * Historial de ajuste (a ojo, en base a pruebas en servidor real):
-     * - 1.0  -> demasiado alto (version original).
-     * - 0.45 -> seguia demasiado alto.
-     * - 0.15 -> seguia demasiado alto.
-     * - -0.35 -> valor actual, a probar (negativo a proposito: el offset interno del
-     *   ArmorStand es mayor de lo esperado, asi que hay que bajar el punto de spawn por
-     *   debajo del bloque para compensarlo).
-     *
-     * Si TODAVIA queda muy alto, seguir bajando en pasos de 0.1-0.2. Si en algun momento
-     * se pasa de largo, subir de nuevo un poco.
+     * - 1.0   -> demasiado alto (version original).
+     * - 0.45  -> seguia demasiado alto.
+     * - 0.15  -> seguia demasiado alto.
+     * - -0.35 -> quedo demasiado bajo (jugador incrustado en el bloque).
+     * - 0.0   -> valor actual, a probar.
      */
-    private static final double SEAT_HEIGHT = -0.35;
+    private static final double SEAT_HEIGHT = 0.0;
 
     private final UUID playerId;
     private final SnakeColor color;
+
+    /** Arena (campo de juego) donde vive esta partida. */
+    private Arena arena;
 
     /** Posicion actual de la cabeza en la rejilla (coordenadas de bloque, Y fija = "boardY"). */
     private Location headLocation;
@@ -86,11 +80,12 @@ public class SnakeGame {
     }
 
     /**
-     * Inicia la partida: coloca la cabeza (bloque de lana real) en el bloque bajo
-     * el jugador, crea el asiento invisible justo encima, y lo monta en el.
+     * Inicia la partida dentro de la arena dada: coloca la cabeza (bloque de lana real) en
+     * el centro de la arena, crea el asiento invisible justo encima, y monta al jugador en el.
      */
-    public void start(Player player) {
-        this.headLocation = player.getLocation().getBlock().getLocation();
+    public void start(Player player, Arena arena) {
+        this.arena = arena;
+        this.headLocation = arena.centerBlockLocation();
         this.currentDirection = Direction.SOUTH;
         this.requestedDirection = currentDirection;
         this.active = true;
@@ -170,17 +165,35 @@ public class SnakeGame {
     /**
      * Avanza la cabeza una casilla en la direccion solicitada, y mueve el asiento;
      * como el jugador es su pasajero, viaja con el automaticamente.
-     * En la Etapa 4 aqui es donde la cola empezara a "seguir" a la cabeza.
+     *
+     * DETECCION DE CHOQUES (Etapa 2): antes de mover la cabeza, se comprueba el bloque de
+     * destino. Si es AIRE, se puede avanzar con normalidad. Si es cualquier otra cosa —la
+     * pared de la arena, la propia cola, o la cola de otro jugador (Etapa 4)— se considera
+     * un choque y la partida termina aqui mismo. Este mismo chequeo es el que mas adelante
+     * (Etapa 3) habra que ampliar: en vez de tratar CUALQUIER bloque no-aire como choque,
+     * habra que revisar primero si es comida o un power-up (y actuar en consecuencia) antes
+     * de asumir que es un obstaculo.
+     *
+     * En la Etapa 4 aqui es tambien donde la cola empezara a "seguir" a la cabeza.
+     *
+     * @return false si la cabeza choco contra algo (fin de la partida); true si se movio
+     *         con normalidad (o si la partida ya no estaba activa, para no romper el loop).
      */
-    public void tick() {
+    public boolean tick() {
         if (!active || headLocation == null || seat == null) {
-            return;
+            return true;
         }
 
         this.currentDirection = requestedDirection;
 
         Location previousHead = headLocation.clone();
         Location newHead = headLocation.clone().add(currentDirection.getDx(), 0, currentDirection.getDz());
+
+        if (newHead.getBlock().getType() != Material.AIR) {
+            // Choque: pared de la arena, cola propia, o cola de otro jugador.
+            active = false;
+            return false;
+        }
 
         newHead.getBlock().setType(color.getWoolMaterial());
 
@@ -191,6 +204,7 @@ public class SnakeGame {
 
         this.headLocation = newHead;
         seat.teleport(seatLocationFor(newHead));
+        return true;
     }
 
     public UUID getPlayerId() {
@@ -199,6 +213,10 @@ public class SnakeGame {
 
     public SnakeColor getColor() {
         return color;
+    }
+
+    public Arena getArena() {
+        return arena;
     }
 
     public Location getHeadLocation() {
