@@ -40,11 +40,19 @@ public class SnakeGame {
      * ArmorStand "small" ya engancha a su pasajero bastante por encima de su propio punto
      * de spawn (es la propia geometria del modelo, no algo que controlemos nosotros). Por
      * eso este valor es mucho menor que "1 bloque": hay que restar mentalmente ese offset
-     * interno del ArmorStand. Si tras probar en el servidor el jugador sigue quedando muy
-     * alto o muy bajo respecto al bloque, este es el numero a ajustar (subir/bajar en
-     * pasos de 0.1-0.2).
+     * interno del ArmorStand.
+     *
+     * Historial de ajuste (a ojo, en base a pruebas en servidor real):
+     * - 1.0  -> demasiado alto (version original).
+     * - 0.45 -> seguia demasiado alto.
+     * - 0.15 -> valor actual, a probar.
+     *
+     * Si TODAVIA queda muy alto, seguir bajando en pasos de 0.1 (puede llegar a hacer
+     * falta un valor negativo, ya que el offset interno del ArmorStand puede superar
+     * incluso este numero). Si en algun momento se pasa de largo y el jugador queda
+     * hundido dentro del bloque, subir de nuevo un poco.
      */
-    private static final double SEAT_HEIGHT = 0.45;
+    private static final double SEAT_HEIGHT = 0.15;
 
     private final UUID playerId;
     private final SnakeColor color;
