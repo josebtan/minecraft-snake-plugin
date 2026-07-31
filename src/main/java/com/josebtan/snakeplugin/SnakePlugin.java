@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.command.SnakeCommand;
 import com.josebtan.snakeplugin.game.GameManager;
+import com.josebtan.snakeplugin.gui.SnakeGuiListener;
 import com.josebtan.snakeplugin.listener.SnakeInputListener;
 import com.josebtan.snakeplugin.listener.SnakeSteerPacketListener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -19,7 +20,7 @@ public final class SnakePlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         this.gameManager = new GameManager(this);
-        this.arenaManager = new ArenaManager();
+        this.arenaManager = new ArenaManager(this);
 
         // Etapa 2: comando definitivo /snake (reemplaza al /snakedebug de la Etapa 1).
         var snakeCommand = getCommand("snake");
@@ -30,9 +31,10 @@ public final class SnakePlugin extends JavaPlugin {
         }
 
         getServer().getPluginManager().registerEvents(new SnakeInputListener(gameManager), this);
+        getServer().getPluginManager().registerEvents(new SnakeGuiListener(gameManager), this);
         new SnakeSteerPacketListener(this, gameManager).register();
 
-        getLogger().info("SnakePlugin habilitado (Etapa 2: arenas delimitadas + comando /snake + deteccion de choques).");
+        getLogger().info("SnakePlugin habilitado (Etapa 2: arenas persistentes + menu de modo/color + comando /snake).");
     }
 
     @Override

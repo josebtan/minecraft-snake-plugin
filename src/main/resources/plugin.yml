@@ -9,7 +9,7 @@ depend: [ProtocolLib]
 commands:
   snake:
     description: "Comando definitivo del plugin: arenas (campo de juego) y control de partida. Reemplaza a /snakedebug (Etapa 1)."
-    usage: "/snake <arena pos1|arena pos2|arena create <nombre>|arena list|join <arena>|leave>"
+    usage: "/snake <arena pos1|arena pos2|arena create <nombre>|arena delete <nombre>|arena list|join <arena>|leave>"
 
 permissions:
   snakeplugin.arena.admin:

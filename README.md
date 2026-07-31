@@ -45,12 +45,17 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   Etapa 1). Las arenas se delimitan marcando dos esquinas al estilo
   WorldEdit — solo registran DONDE puede aparecer la serpiente (y, en la
   Etapa 3, la comida); no construyen nada, cada quien decora/delimita su
-  arena a mano. La deteccion de choques ya funciona: antes de mover la
-  cabeza se revisa si el bloque de destino es aire; si no lo es (algo que
-  el jugador construyo, o mas adelante la cola propia/ajena), la partida
-  termina ahi mismo. El punto de aparicion es aleatorio dentro de la arena,
-  verificando que haya espacio libre por delante para no chocar nada mas
-  entrar.
+  arena a mano. **Las arenas se guardan en disco** (`arenas.yml`) y se
+  recargan solas al reiniciar el servidor; `/snake arena delete <nombre>`
+  las elimina. Unirse a una arena abre un **menu (GUI)** de dos pasos: elegir
+  modo (un jugador / multijugador) y despues elegir color de lana — en modo
+  multijugador, los colores que ya este usando otro jugador activo en esa
+  misma arena aparecen bloqueados. La deteccion de choques ya funciona: antes
+  de mover la cabeza se revisa si el bloque de destino es aire; si no lo es
+  (algo que el jugador construyo, o mas adelante la cola propia/ajena), la
+  partida termina ahi mismo. El punto de aparicion es aleatorio dentro de la
+  arena, verificando que haya espacio libre por delante para no chocar nada
+  mas entrar.
 - [ ] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
   Generacion aleatoria de comida dentro del campo y sistema de puntuacion.
   La deteccion de choques de la Etapa 2 habra que ampliarla: en vez de tratar
@@ -101,22 +106,29 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 3. Parate en una esquina de la zona donde quieras el campo de juego y ejecuta
    `/snake arena pos1`. Ve hasta la esquina opuesta y ejecuta `/snake arena pos2`.
 4. Ejecuta `/snake arena create <nombre>` (por ejemplo `/snake arena create
-   arena1`): esto solo registra el rectangulo, no toca ningun bloque. Si
-   quieres delimitar visualmente la zona (paredes, decoracion, lo que sea),
-   construyelo tu mismo con normalidad — esos bloques funcionaran igual
-   como obstaculos para la serpiente.
-5. Cualquier jugador ejecuta `/snake join <nombre>` para aparecer sentado
-   sobre la cabeza de su serpiente, en un punto aleatorio libre dentro de
-   esa arena (se verifica que haya espacio despejado por delante, para no
-   chocar apenas empezar). Camara libre, se controla con **W / A / S / D**.
+   arena1`): esto solo registra el rectangulo (y lo guarda en disco), no toca
+   ningun bloque. Si quieres delimitar visualmente la zona (paredes,
+   decoracion, lo que sea), construyelo tu mismo con normalidad — esos
+   bloques funcionaran igual como obstaculos para la serpiente.
+5. Cualquier jugador ejecuta `/snake join <nombre>`: se abre un menu para
+   elegir **Un jugador** o **Multijugador**, y despues otro para elegir el
+   **color** de lana de su serpiente (en modo multijugador, los colores ya
+   usados por otros jugadores activos en esa arena aparecen con un bloque de
+   barrera, no seleccionables). Al elegir color, aparece sentado sobre la
+   cabeza de su serpiente, en un punto aleatorio libre dentro de la arena.
+   Camara libre, se controla con **W / A / S / D**.
 6. Si la cabeza choca contra algo solido (o, en etapas futuras, contra una
    cola), la partida termina automaticamente y se avisa al jugador.
 7. `/snake leave` para levantarse y detener la partida manualmente.
-8. `/snake arena list` lista las arenas ya creadas.
+8. `/snake arena list` lista las arenas ya creadas; `/snake arena delete
+   <nombre>` elimina una (tambien se guarda en disco).
+9. Reinicia el servidor y comprueba que las arenas siguen ahi con
+   `/snake arena list` — se cargan solas desde `arenas.yml` al arrancar.
 
-> Nota: las arenas se guardan solo en memoria por ahora — se pierden al
-> reiniciar el servidor y hay que volver a crearlas. Persistirlas en disco
-> queda pendiente para una etapa futura.
+> Nota: borrar una arena (`arena delete`) no interrumpe a la fuerza ninguna
+> partida que ya estuviera en curso ahi — simplemente deja de aparecer en la
+> lista/menu para unirse. Interrumpir partidas activas al borrar su arena
+> queda pendiente para una etapa futura si hace falta.
 >
 > Historial de decisiones de diseño para el movimiento/monta (Etapa 1):
 > 1. Se probo mover al jugador solo mirando alrededor (sin WASD, sin sentarse).

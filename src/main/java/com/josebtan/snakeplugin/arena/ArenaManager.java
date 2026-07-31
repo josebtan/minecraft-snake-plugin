@@ -1,8 +1,15 @@
 package com.josebtan.snakeplugin.arena;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,14 +22,90 @@ import java.util.concurrent.ConcurrentHashMap;
  * mundo: la arena es solo la zona donde luego apareceran jugadores y comida — el propio
  * jugador decide como decorarla o delimitarla fisicamente.
  *
- * Etapa futura pendiente: persistir las arenas en disco (config.yml o similar) — ahora mismo
- * se pierden al reiniciar el servidor y hay que volver a crearlas.
+ * ETAPA 2 (persistencia): las arenas se guardan en "arenas.yml", dentro de la carpeta de
+ * datos del plugin, y se recargan automaticamente al arrancar el servidor. Cualquier
+ * creacion o borrado de una arena reescribe el archivo entero (son pocos datos, no hace
+ * falta nada mas sofisticado).
  */
 public class ArenaManager {
 
+    private final Plugin plugin;
+    private final File file;
     private final Map<String, Arena> arenas = new ConcurrentHashMap<>();
     private final Map<UUID, Location> pendingPos1 = new ConcurrentHashMap<>();
     private final Map<UUID, Location> pendingPos2 = new ConcurrentHashMap<>();
+
+    public ArenaManager(Plugin plugin) {
+        this.plugin = plugin;
+        this.file = new File(plugin.getDataFolder(), "arenas.yml");
+        load();
+    }
+
+    /** Carga las arenas guardadas desde arenas.yml, si el archivo existe. */
+    private void load() {
+        if (!file.exists()) {
+            return;
+        }
+
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection section = config.getConfigurationSection("arenas");
+        if (section == null) {
+            return;
+        }
+
+        int loaded = 0;
+        for (String key : section.getKeys(false)) {
+            ConfigurationSection arenaSection = section.getConfigurationSection(key);
+            if (arenaSection == null) {
+                continue;
+            }
+
+            String worldName = arenaSection.getString("world");
+            World world = worldName != null ? Bukkit.getWorld(worldName) : null;
+            if (world == null) {
+                plugin.getLogger().warning("SnakePlugin: no se pudo cargar la arena '" + key
+                        + "' (el mundo '" + worldName + "' no existe o no esta cargado).");
+                continue;
+            }
+
+            int minX = arenaSection.getInt("minX");
+            int maxX = arenaSection.getInt("maxX");
+            int minZ = arenaSection.getInt("minZ");
+            int maxZ = arenaSection.getInt("maxZ");
+            int boardY = arenaSection.getInt("boardY");
+
+            arenas.put(key, new Arena(key, world, minX, maxX, minZ, maxZ, boardY));
+            loaded++;
+        }
+
+        if (loaded > 0) {
+            plugin.getLogger().info("SnakePlugin: " + loaded + " arena(s) cargada(s) desde arenas.yml.");
+        }
+    }
+
+    /** Vuelca todas las arenas actuales a arenas.yml (sobreescribe el archivo entero). */
+    private void save() {
+        YamlConfiguration config = new YamlConfiguration();
+        for (Map.Entry<String, Arena> entry : arenas.entrySet()) {
+            Arena arena = entry.getValue();
+            String path = "arenas." + entry.getKey();
+            config.set(path + ".world", arena.getWorld().getName());
+            config.set(path + ".minX", arena.getMinX());
+            config.set(path + ".maxX", arena.getMaxX());
+            config.set(path + ".minZ", arena.getMinZ());
+            config.set(path + ".maxZ", arena.getMaxZ());
+            config.set(path + ".boardY", arena.getBoardY());
+        }
+
+        try {
+            if (!plugin.getDataFolder().exists()) {
+                plugin.getDataFolder().mkdirs();
+            }
+            config.save(file);
+        } catch (IOException e) {
+            plugin.getLogger().warning("SnakePlugin: no se pudo guardar arenas.yml: " + e.getMessage());
+        }
+    }
 
     public void setPos1(Player player, Location location) {
         pendingPos1.put(player.getUniqueId(), location.getBlock().getLocation());
@@ -42,8 +125,8 @@ public class ArenaManager {
 
     /**
      * Crea (o reemplaza) la arena con el nombre dado usando las esquinas pos1/pos2 que el
-     * jugador tenga marcadas en ese momento. Devuelve null sin hacer nada si falta alguna
-     * esquina o si estan en mundos distintos.
+     * jugador tenga marcadas en ese momento, y la guarda en disco. Devuelve null sin hacer
+     * nada si falta alguna esquina o si estan en mundos distintos.
      */
     public Arena createFromPending(Player player, String name) {
         Location pos1 = getPos1(player);
@@ -65,7 +148,24 @@ public class ArenaManager {
 
         Arena arena = new Arena(name, pos1.getWorld(), minX, maxX, minZ, maxZ, boardY);
         arenas.put(name.toLowerCase(), arena);
+        save();
         return arena;
+    }
+
+    /**
+     * Elimina la arena con ese nombre (si existe) y guarda el cambio en disco.
+     * No afecta a partidas ya en curso en esa arena (si alguna sigue activa, simplemente
+     * deja de aparecer en la lista/menu, pero no se interrumpe a la fuerza).
+     *
+     * @return true si existia y se elimino; false si no habia ninguna arena con ese nombre.
+     */
+    public boolean deleteArena(String name) {
+        Arena removed = arenas.remove(name.toLowerCase());
+        if (removed == null) {
+            return false;
+        }
+        save();
+        return true;
     }
 
     public Arena getArena(String name) {

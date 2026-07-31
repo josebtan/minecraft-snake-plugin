@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin.command;
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.game.GameManager;
+import com.josebtan.snakeplugin.gui.SnakeGuiMenus;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -19,9 +20,10 @@ import java.util.List;
  * Uso:
  *   /snake arena pos1              -> marca la esquina 1 de la arena (donde estas parado)
  *   /snake arena pos2              -> marca la esquina 2
- *   /snake arena create <nombre>   -> construye la arena entre pos1 y pos2
+ *   /snake arena create <nombre>   -> construye la arena entre pos1 y pos2 (se guarda en disco)
+ *   /snake arena delete <nombre>   -> elimina esa arena (se guarda en disco)
  *   /snake arena list              -> lista las arenas creadas
- *   /snake join <arena>            -> crea tu serpiente dentro de esa arena
+ *   /snake join <arena>            -> abre el menu para unirte a esa arena (modo -> color)
  *   /snake leave                   -> te levanta y elimina tu serpiente
  *
  * Sigue sin haber comida/puntos (Etapa 3) ni crecimiento de cola (Etapa 4).
@@ -63,7 +65,7 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             return;
         }
         if (args.length < 2) {
-            player.sendMessage(Component.text("Uso: /snake arena <pos1|pos2|create <nombre>|list>"));
+            player.sendMessage(Component.text("Uso: /snake arena <pos1|pos2|create <nombre>|delete <nombre>|list>"));
             return;
         }
 
@@ -88,7 +90,19 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
                             "Falta marcar pos1 y pos2 (en el mismo mundo) antes de crear la arena."));
                     return;
                 }
-                player.sendMessage(Component.text("Arena '" + name + "' creada."));
+                player.sendMessage(Component.text("Arena '" + name + "' creada y guardada."));
+            }
+            case "delete" -> {
+                if (args.length < 3) {
+                    player.sendMessage(Component.text("Uso: /snake arena delete <nombre>"));
+                    return;
+                }
+                String name = args[2];
+                if (arenaManager.deleteArena(name)) {
+                    player.sendMessage(Component.text("Arena '" + name + "' eliminada."));
+                } else {
+                    player.sendMessage(Component.text("No existe ninguna arena con ese nombre."));
+                }
             }
             case "list" -> {
                 if (arenaManager.getArenas().isEmpty()) {
@@ -98,7 +112,7 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
                             "Arenas: " + String.join(", ", arenaManager.getArenas().keySet())));
                 }
             }
-            default -> player.sendMessage(Component.text("Uso: /snake arena <pos1|pos2|create <nombre>|list>"));
+            default -> player.sendMessage(Component.text("Uso: /snake arena <pos1|pos2|create <nombre>|delete <nombre>|list>"));
         }
     }
 
@@ -116,14 +130,7 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(Component.text("No existe ninguna arena con ese nombre. Usa /snake arena list."));
             return;
         }
-        if (gameManager.startGame(player, arena) == null) {
-            player.sendMessage(Component.text(
-                    "No se encontro un sitio libre para aparecer en '" + arena.getName()
-                            + "' (esta muy ocupada/decorada). Prueba de nuevo o usa una arena mas despejada."));
-            return;
-        }
-        player.sendMessage(Component.text(
-                "Serpiente creada en '" + arena.getName() + "'. Usa W/A/S/D para dirigirla."));
+        SnakeGuiMenus.openModeMenu(player, arena);
     }
 
     private void handleLeave(Player player) {
@@ -146,8 +153,11 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             options.add("pos1");
             options.add("pos2");
             options.add("create");
+            options.add("delete");
             options.add("list");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("join")) {
+            options.addAll(arenaManager.getArenas().keySet());
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("arena") && args[1].equalsIgnoreCase("delete")) {
             options.addAll(arenaManager.getArenas().keySet());
         }
         return options;

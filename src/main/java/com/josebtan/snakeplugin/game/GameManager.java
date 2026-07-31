@@ -7,7 +7,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,33 +37,46 @@ public class GameManager {
     private final Plugin plugin;
     private final Map<UUID, SnakeGame> games = new ConcurrentHashMap<>();
     private BukkitTask movementTask;
-    private int nextColorIndex = 0;
 
     public GameManager(Plugin plugin) {
         this.plugin = plugin;
     }
 
     /**
-     * Crea e inicia una partida nueva para el jugador dentro de la arena dada, si no tiene
-     * ya una activa. Devuelve null si la arena no tiene ningun punto libre donde aparecer
-     * (ver Arena#findRandomSpawn / SnakeGame#start) — en ese caso no se crea nada.
+     * Crea e inicia una partida nueva para el jugador dentro de la arena dada, con el color
+     * elegido en el menu (ver com.josebtan.snakeplugin.gui), si no tiene ya una activa.
+     * Devuelve null si la arena no tiene ningun punto libre donde aparecer (ver
+     * Arena#findRandomSpawn / SnakeGame#start) — en ese caso no se crea nada.
      */
-    public SnakeGame startGame(Player player, Arena arena) {
+    public SnakeGame startGame(Player player, Arena arena, SnakeColor color) {
         UUID id = player.getUniqueId();
         if (games.containsKey(id)) {
             return games.get(id);
         }
 
-        SnakeColor color = SnakeColor.byIndex(nextColorIndex);
         SnakeGame game = new SnakeGame(id, color);
         if (!game.start(player, arena)) {
             return null;
         }
-        nextColorIndex++;
         games.put(id, game);
 
         ensureLoopRunning();
         return game;
+    }
+
+    /**
+     * Colores ya en uso por partidas activas EN ESA MISMA ARENA (para el menu de seleccion
+     * de color en modo multijugador: ver com.josebtan.snakeplugin.gui.ColorMenu).
+     */
+    public Set<SnakeColor> getColorsInUse(Arena arena) {
+        Set<SnakeColor> inUse = new HashSet<>();
+        for (SnakeGame game : games.values()) {
+            Arena gameArena = game.getArena();
+            if (gameArena != null && gameArena.getName().equalsIgnoreCase(arena.getName())) {
+                inUse.add(game.getColor());
+            }
+        }
+        return inUse;
     }
 
     /** Detiene y elimina la partida del jugador, si existe (salida voluntaria). */
