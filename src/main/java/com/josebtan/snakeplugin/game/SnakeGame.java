@@ -14,10 +14,10 @@ import java.util.UUID;
  * Representa la partida de un jugador: su serpiente, posicion de la cabeza,
  * direccion actual y (en etapas futuras) su cola y puntuacion.
  *
- * ETAPA 2: la partida ahora vive dentro de una Arena (campo delimitado por paredes —
- * ver com.josebtan.snakeplugin.arena.Arena), en vez de moverse libremente por el mundo
- * como en la Etapa 1. La cabeza sigue siendo un bloque de lana REAL y visible; el jugador
- * se "sienta" justo encima, montado en un ArmorStand invisible que viaja pegado a el.
+ * ETAPA 2: la partida ahora vive dentro de una Arena (ver com.josebtan.snakeplugin.arena.Arena),
+ * que solo define DONDE puede aparecer la serpiente (y, en la Etapa 3, la comida) — ya no
+ * construye paredes ni modifica el mundo. Cualquier bloque solido que haya en el camino,
+ * puesto por quien sea, cuenta como obstaculo igual (ver #tick).
  *
  * La camara del jugador queda LIBRE (sin bloqueo cenital): puede mirar a su
  * alrededor con normalidad mientras viaja, como si estuviera sentado en un
@@ -45,6 +45,12 @@ public class SnakeGame {
      * - 0.0   -> valor actual, a probar.
      */
     private static final double SEAT_HEIGHT = 0.0;
+
+    /** Cuantas casillas libres por delante se exigen al elegir el punto de spawn (ver Arena#findRandomSpawn). */
+    private static final int SPAWN_CLEARANCE = 3;
+
+    /** Cuantos intentos de posicion aleatoria se prueban antes de rendirse. */
+    private static final int SPAWN_MAX_ATTEMPTS = 40;
 
     private final UUID playerId;
     private final SnakeColor color;
@@ -80,13 +86,23 @@ public class SnakeGame {
     }
 
     /**
-     * Inicia la partida dentro de la arena dada: coloca la cabeza (bloque de lana real) en
-     * el centro de la arena, crea el asiento invisible justo encima, y monta al jugador en el.
+     * Inicia la partida dentro de la arena dada: elige una posicion aleatoria segura (con
+     * espacio libre por delante, ver Arena#findRandomSpawn) para la cabeza (bloque de lana
+     * real), crea el asiento invisible justo encima, y monta al jugador en el.
+     *
+     * @return false si no se encontro ningun punto de spawn libre en la arena (no se inicia
+     *         nada en ese caso); true si la partida arranco con normalidad.
      */
-    public void start(Player player, Arena arena) {
+    public boolean start(Player player, Arena arena) {
         this.arena = arena;
-        this.headLocation = arena.centerBlockLocation();
         this.currentDirection = Direction.SOUTH;
+
+        Location spawn = arena.findRandomSpawn(currentDirection, SPAWN_CLEARANCE, SPAWN_MAX_ATTEMPTS);
+        if (spawn == null) {
+            return false;
+        }
+
+        this.headLocation = spawn;
         this.requestedDirection = currentDirection;
         this.active = true;
 
@@ -94,6 +110,7 @@ public class SnakeGame {
 
         this.seat = spawnSeat(headLocation);
         seat.addPassenger(player);
+        return true;
     }
 
     /** Crea el ArmorStand invisible que sirve de asiento. */
@@ -167,12 +184,12 @@ public class SnakeGame {
      * como el jugador es su pasajero, viaja con el automaticamente.
      *
      * DETECCION DE CHOQUES (Etapa 2): antes de mover la cabeza, se comprueba el bloque de
-     * destino. Si es AIRE, se puede avanzar con normalidad. Si es cualquier otra cosa —la
-     * pared de la arena, la propia cola, o la cola de otro jugador (Etapa 4)— se considera
-     * un choque y la partida termina aqui mismo. Este mismo chequeo es el que mas adelante
-     * (Etapa 3) habra que ampliar: en vez de tratar CUALQUIER bloque no-aire como choque,
-     * habra que revisar primero si es comida o un power-up (y actuar en consecuencia) antes
-     * de asumir que es un obstaculo.
+     * destino. Si es AIRE, se puede avanzar con normalidad. Si es cualquier otra cosa —algo
+     * que el propio jugador construyo dentro de su arena, la propia cola, o la cola de otro
+     * jugador (Etapa 4)— se considera un choque y la partida termina aqui mismo. Este mismo
+     * chequeo es el que mas adelante (Etapa 3) habra que ampliar: en vez de tratar CUALQUIER
+     * bloque no-aire como choque, habra que revisar primero si es comida o un power-up (y
+     * actuar en consecuencia) antes de asumir que es un obstaculo.
      *
      * En la Etapa 4 aqui es tambien donde la cola empezara a "seguir" a la cabeza.
      *
@@ -190,7 +207,7 @@ public class SnakeGame {
         Location newHead = headLocation.clone().add(currentDirection.getDx(), 0, currentDirection.getDz());
 
         if (newHead.getBlock().getType() != Material.AIR) {
-            // Choque: pared de la arena, cola propia, o cola de otro jugador.
+            // Choque: bloque construido por el jugador, cola propia, o cola de otro jugador.
             active = false;
             return false;
         }

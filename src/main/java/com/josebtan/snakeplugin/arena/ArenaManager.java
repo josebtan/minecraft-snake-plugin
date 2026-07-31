@@ -10,8 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Guarda las arenas creadas (por nombre) y las selecciones de esquinas "pos1"/"pos2" que
  * cada jugador va marcando mientras define una nueva arena (al estilo WorldEdit: te paras
- * en una esquina, marcas pos1; te paras en la otra, marcas pos2; luego "create" construye
- * el rectangulo entre ambas).
+ * en una esquina, marcas pos1; te paras en la otra, marcas pos2; luego "create" registra el
+ * rectangulo entre ambas como la zona de esa arena). No se construye ni modifica nada del
+ * mundo: la arena es solo la zona donde luego apareceran jugadores y comida — el propio
+ * jugador decide como decorarla o delimitarla fisicamente.
  *
  * Etapa futura pendiente: persistir las arenas en disco (config.yml o similar) — ahora mismo
  * se pierden al reiniciar el servidor y hay que volver a crearlas.
@@ -62,7 +64,6 @@ public class ArenaManager {
         int boardY = pos1.getBlockY();
 
         Arena arena = new Arena(name, pos1.getWorld(), minX, maxX, minZ, maxZ, boardY);
-        arena.build();
         arenas.put(name.toLowerCase(), arena);
         return arena;
     }

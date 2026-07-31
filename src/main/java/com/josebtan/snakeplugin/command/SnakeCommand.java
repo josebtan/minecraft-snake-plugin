@@ -116,7 +116,12 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(Component.text("No existe ninguna arena con ese nombre. Usa /snake arena list."));
             return;
         }
-        gameManager.startGame(player, arena);
+        if (gameManager.startGame(player, arena) == null) {
+            player.sendMessage(Component.text(
+                    "No se encontro un sitio libre para aparecer en '" + arena.getName()
+                            + "' (esta muy ocupada/decorada). Prueba de nuevo o usa una arena mas despejada."));
+            return;
+        }
         player.sendMessage(Component.text(
                 "Serpiente creada en '" + arena.getName() + "'. Usa W/A/S/D para dirigirla."));
     }

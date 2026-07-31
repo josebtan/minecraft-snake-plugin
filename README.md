@@ -42,11 +42,15 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   con las teclas WASD (leidas via ProtocolLib).
 - [x] **Etapa 2 — Comandos y creacion del campo de juego.**
   Comando definitivo `/snake ...` (reemplaza al `/snakedebug` temporal de la
-  Etapa 1). Las arenas (campo de juego) se delimitan marcando dos esquinas al
-  estilo WorldEdit; al crearlas se levantan paredes solidas alrededor. La
-  deteccion de choques ya funciona: antes de mover la cabeza se revisa si el
-  bloque de destino es aire; si no lo es (pared de la arena, o mas adelante
-  la cola propia/ajena), la partida termina ahi mismo.
+  Etapa 1). Las arenas se delimitan marcando dos esquinas al estilo
+  WorldEdit — solo registran DONDE puede aparecer la serpiente (y, en la
+  Etapa 3, la comida); no construyen nada, cada quien decora/delimita su
+  arena a mano. La deteccion de choques ya funciona: antes de mover la
+  cabeza se revisa si el bloque de destino es aire; si no lo es (algo que
+  el jugador construyo, o mas adelante la cola propia/ajena), la partida
+  termina ahi mismo. El punto de aparicion es aleatorio dentro de la arena,
+  verificando que haya espacio libre por delante para no chocar nada mas
+  entrar.
 - [ ] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
   Generacion aleatoria de comida dentro del campo y sistema de puntuacion.
   La deteccion de choques de la Etapa 2 habra que ampliarla: en vez de tratar
@@ -97,12 +101,15 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
 3. Parate en una esquina de la zona donde quieras el campo de juego y ejecuta
    `/snake arena pos1`. Ve hasta la esquina opuesta y ejecuta `/snake arena pos2`.
 4. Ejecuta `/snake arena create <nombre>` (por ejemplo `/snake arena create
-   arena1`): se limpia el interior y se levantan paredes solidas alrededor
-   del rectangulo marcado.
+   arena1`): esto solo registra el rectangulo, no toca ningun bloque. Si
+   quieres delimitar visualmente la zona (paredes, decoracion, lo que sea),
+   construyelo tu mismo con normalidad — esos bloques funcionaran igual
+   como obstaculos para la serpiente.
 5. Cualquier jugador ejecuta `/snake join <nombre>` para aparecer sentado
-   sobre la cabeza de su serpiente, en el centro de esa arena. Camara libre,
-   se controla con **W / A / S / D**.
-6. Si la cabeza choca contra una pared (o, en etapas futuras, contra una
+   sobre la cabeza de su serpiente, en un punto aleatorio libre dentro de
+   esa arena (se verifica que haya espacio despejado por delante, para no
+   chocar apenas empezar). Camara libre, se controla con **W / A / S / D**.
+6. Si la cabeza choca contra algo solido (o, en etapas futuras, contra una
    cola), la partida termina automaticamente y se avisa al jugador.
 7. `/snake leave` para levantarse y detener la partida manualmente.
 8. `/snake arena list` lista las arenas ya creadas.

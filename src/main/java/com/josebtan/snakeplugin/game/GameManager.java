@@ -41,16 +41,23 @@ public class GameManager {
         this.plugin = plugin;
     }
 
-    /** Crea e inicia una partida nueva para el jugador dentro de la arena dada, si no tiene ya una activa. */
+    /**
+     * Crea e inicia una partida nueva para el jugador dentro de la arena dada, si no tiene
+     * ya una activa. Devuelve null si la arena no tiene ningun punto libre donde aparecer
+     * (ver Arena#findRandomSpawn / SnakeGame#start) — en ese caso no se crea nada.
+     */
     public SnakeGame startGame(Player player, Arena arena) {
         UUID id = player.getUniqueId();
         if (games.containsKey(id)) {
             return games.get(id);
         }
 
-        SnakeColor color = SnakeColor.byIndex(nextColorIndex++);
+        SnakeColor color = SnakeColor.byIndex(nextColorIndex);
         SnakeGame game = new SnakeGame(id, color);
-        game.start(player, arena);
+        if (!game.start(player, arena)) {
+            return null;
+        }
+        nextColorIndex++;
         games.put(id, game);
 
         ensureLoopRunning();
