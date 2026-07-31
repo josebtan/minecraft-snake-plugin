@@ -45,14 +45,15 @@ public class SnakeGame {
      * Historial de ajuste (a ojo, en base a pruebas en servidor real):
      * - 1.0  -> demasiado alto (version original).
      * - 0.45 -> seguia demasiado alto.
-     * - 0.15 -> valor actual, a probar.
+     * - 0.15 -> seguia demasiado alto.
+     * - -0.35 -> valor actual, a probar (negativo a proposito: el offset interno del
+     *   ArmorStand es mayor de lo esperado, asi que hay que bajar el punto de spawn por
+     *   debajo del bloque para compensarlo).
      *
-     * Si TODAVIA queda muy alto, seguir bajando en pasos de 0.1 (puede llegar a hacer
-     * falta un valor negativo, ya que el offset interno del ArmorStand puede superar
-     * incluso este numero). Si en algun momento se pasa de largo y el jugador queda
-     * hundido dentro del bloque, subir de nuevo un poco.
+     * Si TODAVIA queda muy alto, seguir bajando en pasos de 0.1-0.2. Si en algun momento
+     * se pasa de largo, subir de nuevo un poco.
      */
-    private static final double SEAT_HEIGHT = 0.15;
+    private static final double SEAT_HEIGHT = -0.35;
 
     private final UUID playerId;
     private final SnakeColor color;
