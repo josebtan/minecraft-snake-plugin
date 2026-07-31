@@ -34,8 +34,17 @@ import java.util.UUID;
  */
 public class SnakeGame {
 
-    /** Cuanto se eleva el asiento sobre el bloque de la cabeza (altura tipica de "sentado"). */
-    private static final double SEAT_HEIGHT = 1.0;
+    /**
+     * Cuanto se eleva el PUNTO DE SPAWN del asiento (ArmorStand) sobre el bloque de la
+     * cabeza. OJO: esto NO es la altura final a la que queda sentado el jugador — un
+     * ArmorStand "small" ya engancha a su pasajero bastante por encima de su propio punto
+     * de spawn (es la propia geometria del modelo, no algo que controlemos nosotros). Por
+     * eso este valor es mucho menor que "1 bloque": hay que restar mentalmente ese offset
+     * interno del ArmorStand. Si tras probar en el servidor el jugador sigue quedando muy
+     * alto o muy bajo respecto al bloque, este es el numero a ajustar (subir/bajar en
+     * pasos de 0.1-0.2).
+     */
+    private static final double SEAT_HEIGHT = 0.45;
 
     private final UUID playerId;
     private final SnakeColor color;

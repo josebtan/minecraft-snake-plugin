@@ -23,12 +23,14 @@ import org.bukkit.plugin.Plugin;
  * no expone ese paquete de forma nativa y estable en todas las versiones, asi
  * que usamos ProtocolLib, que lo abstrae de forma fiable desde hace años.
  *
- * NOTA: el orden exacto de los campos (sideways/forward) y el signo de cada
- * uno vienen del protocolo de Minecraft y no se pueden verificar sin probar
- * en un servidor real. Si al jugar notas que W te mueve hacia el lado
- * contrario, o que A/D estan invertidos, es cuestion de intercambiar los
- * indices o invertir el signo aqui abajo (esta todo centralizado en este
- * metodo para que sea facil de ajustar).
+ * NOTA: sideways=indice 0, forward=indice 1 (confirmado contra la propia
+ * libreria ProtocolLib). Lo que SI fallaba antes era tratar esos dos floats
+ * como si fueran coordenadas absolutas del mundo: en realidad son relativos
+ * a hacia donde mira la camara del jugador en ese instante (W siempre es
+ * "hacia donde miras", no "hacia el norte"). Por eso directionFromInput()
+ * rota el vector (sideways, forward) por el yaw del jugador antes de decidir
+ * la direccion de la rejilla — sin eso, el control solo "funcionaba por
+ * casualidad" cuando el jugador miraba justo hacia el sur.
  */
 public class SnakeSteerPacketListener {
 
@@ -62,25 +64,49 @@ public class SnakeSteerPacketListener {
         float sideways = event.getPacket().getFloat().read(0);
         float forward = event.getPacket().getFloat().read(1);
 
-        Direction requested = directionFromInput(sideways, forward);
+        // OJO: sideways/forward son RELATIVOS a hacia donde mira la camara del jugador en
+        // ese instante, no coordenadas absolutas del mundo (esto es lo que fallaba antes:
+        // se estaban tratando como si W siempre fuera "norte" del mundo, cuando en
+        // realidad W siempre es "hacia donde miras"). Como la camara es libre, hay que
+        // rotar ese vector por el yaw del jugador para saber a que direccion de la
+        // rejilla (norte/sur/este/oeste) corresponde realmente.
+        Direction requested = directionFromInput(sideways, forward, player.getLocation().getYaw());
         if (requested != null) {
             gameManager.requestDirection(player, requested);
         }
     }
 
     /**
-     * Convierte los valores crudos de "sideways"/"forward" del paquete en una
-     * de las 4 direcciones de la rejilla. Solo se atiende la tecla dominante,
-     * igual que en el Snake clasico (no se puede ir en diagonal).
+     * Convierte los valores crudos de "sideways"/"forward" del paquete (relativos a la
+     * camara) mas el yaw del jugador, en una de las 4 direcciones ABSOLUTAS de la
+     * rejilla del mundo. Solo se atiende el eje dominante del vector resultante, igual
+     * que en el Snake clasico (no se puede ir en diagonal).
      */
-    private Direction directionFromInput(float sideways, float forward) {
+    private Direction directionFromInput(float sideways, float forward, float yawDegrees) {
         if (forward == 0f && sideways == 0f) {
             return null;
         }
-        if (Math.abs(forward) >= Math.abs(sideways)) {
-            return forward > 0 ? Direction.NORTH : Direction.SOUTH; // W : S
+
+        double yawRad = Math.toRadians(yawDegrees);
+
+        // Vector "hacia adelante" en el mundo, segun hacia donde mira el jugador
+        // (misma convencion que Location#getDirection(): yaw 0 = sur, 90 = oeste...).
+        double forwardX = -Math.sin(yawRad);
+        double forwardZ = Math.cos(yawRad);
+
+        // Vector "hacia la izquierda del jugador" en el mundo (perpendicular al anterior).
+        double leftX = Math.cos(yawRad);
+        double leftZ = Math.sin(yawRad);
+
+        // "sideways" es positivo hacia la izquierda del jugador (ver documentacion del
+        // paquete Steer Vehicle / Player Input).
+        double worldX = forward * forwardX + sideways * leftX;
+        double worldZ = forward * forwardZ + sideways * leftZ;
+
+        if (Math.abs(worldX) >= Math.abs(worldZ)) {
+            return worldX > 0 ? Direction.EAST : Direction.WEST;
         } else {
-            return sideways > 0 ? Direction.WEST : Direction.EAST;  // A : D
+            return worldZ > 0 ? Direction.SOUTH : Direction.NORTH;
         }
     }
 }
