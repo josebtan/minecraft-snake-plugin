@@ -11,6 +11,7 @@ import com.josebtan.snakeplugin.game.GameManager;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
+import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -20,34 +21,40 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * Por que hace falta esto: el cliente de Minecraft SIEMPRE envia este paquete
  * cuando el jugador esta montado en cualquier entidad, sin importar si esa
- * entidad responde o no al movimiento en el propio juego (un ArmorStand nunca
- * se movera solo, pero el paquete se sigue enviando igualmente). Bukkit/Paper
- * no expone ese paquete de forma nativa y estable en todas las versiones, asi
- * que usamos ProtocolLib, que lo abstrae de forma fiable desde hace años.
+ * entidad responde o no al movimiento en el propio juego. Bukkit/Paper no
+ * expone ese paquete de forma nativa y estable en todas las versiones, asi
+ * que se usa ProtocolLib para interceptarlo a bajo nivel.
  *
- * IMPORTANTE — dos formatos distintos segun la version del servidor:
- * - Hasta 1.21.1 aprox: el paquete trae dos floats, "sideways" (indice 0) y
- *   "forward" (indice 1).
- * - Desde 1.21.4: Mojang rehizo este paquete por completo (ver "Input"
- *   record en el propio codigo de Minecraft) y ahora viaja como 7 booleanos
- *   (forward, backward, left, right, jump, shift, sprint), sin ningun campo
- *   float. Si el servidor va en esta version y seguimos leyendo
- *   getFloat().read(0), revienta con FieldAccessException ("length 0") —
- *   fue justo el error que salio en el log de pruebas.
+ * HISTORIAL DEL PROBLEMA (importante para no volver a tropezar con esto):
+ * - Hasta 1.21.1 aprox: el paquete traia dos floats de toda la vida,
+ *   "sideways" (indice 0) y "forward" (indice 1). Esto es lo que leia la
+ *   primera version de esta clase.
+ * - Desde 1.21.4: Mojang rehizo el paquete. Ahora es un
+ *   "ServerboundPlayerInputPacket" que envuelve un unico record "Input" con
+ *   7 booleanos (forward, backward, left, right, jump, shift, sprint). Como
+ *   ese record va ANIDADO (no son campos sueltos del paquete), ni
+ *   packet.getFloat() ni packet.getBooleans() encuentran nada: ambos
+ *   devuelven longitud 0 (confirmado en pruebas reales: "booleans=0,
+ *   floats=0"). ProtocolLib, al menos en la version usada aqui, todavia no
+ *   desempaqueta ese record anidado por si solo.
  *
- * Por eso aqui se intenta primero el formato nuevo (booleanos) y, si el
- * paquete no los trae, se cae al formato viejo (floats). Si ninguno de los
- * dos aparece (version todavia mas rara/futura), se deja constancia en el
- * log UNA sola vez con el tamaño de cada modificador, para poder diagnosticar
- * sin tener que adivinar a ciegas.
+ * SOLUCION: cuando ninguno de los dos formatos "planos" anteriores aparece,
+ * se cae a un tercer nivel: leer el paquete NMS crudo (packet.getHandle())
+ * por reflexion pura, buscando un metodo sin argumentos que devuelva un
+ * objeto con metodos booleanos "forward"/"backward"/"left"/"right" (el
+ * record Input). Esto funciona SIN tener que fijar nombres de paquete/clase
+ * de Minecraft a mano (que cambian entre versiones), porque en el Paper
+ * moderno los nombres de metodo de estos records ya vienen "deofuscados"
+ * (mapeados con Mojang mappings) y coinciden literalmente con
+ * forward()/backward()/left()/right(). El resultado de esta busqueda se
+ * cachea la primera vez que funciona, para no repetir el escaneo en cada
+ * paquete (20 veces por segundo por jugador).
  *
- * NOTA sobre orientacion: tanto "sideways" como los booleanos left/right son
+ * NOTA sobre orientacion: sideways/forward (o los booleanos left/right) son
  * RELATIVOS a hacia donde mira la camara del jugador en ese instante, no
- * coordenadas absolutas del mundo (W siempre es "hacia donde miras", no
- * "hacia el norte"). Por eso directionFromInput() rota el vector resultante
- * por el yaw del jugador antes de decidir la direccion de la rejilla — sin
- * eso, el control solo "funcionaria por casualidad" cuando el jugador mira
- * justo hacia el sur.
+ * coordenadas absolutas del mundo. Por eso directionFromInput() rota el
+ * vector resultante por el yaw del jugador antes de decidir la direccion de
+ * la rejilla.
  */
 public class SnakeSteerPacketListener {
 
@@ -56,6 +63,15 @@ public class SnakeSteerPacketListener {
 
     /** Para no inundar la consola: el aviso de "no reconozco este paquete" solo sale una vez. */
     private final AtomicBoolean loggedUnknownFormat = new AtomicBoolean(false);
+
+    // --- Cache de reflexion para el formato nuevo (1.21.4+) ---
+    private final Object reflectionLock = new Object();
+    private volatile boolean reflectionAttempted = false;
+    private volatile Method inputAccessor;    // metodo del paquete que devuelve el record "Input"
+    private volatile Method forwardAccessor;
+    private volatile Method backwardAccessor;
+    private volatile Method leftAccessor;
+    private volatile Method rightAccessor;
 
     public SnakeSteerPacketListener(Plugin plugin, GameManager gameManager) {
         this.plugin = plugin;
@@ -88,35 +104,47 @@ public class SnakeSteerPacketListener {
             int floatCount = event.getPacket().getFloat().size();
 
             if (booleanCount >= 4) {
-                // Formato nuevo (1.21.4+): 7 booleanos en orden
-                // forward, backward, left, right, jump, shift, sprint.
+                // Formato "plano" nuevo, en caso de que ProtocolLib SI lo desempaquete
+                // en alguna version: 7 booleanos, forward/backward/left/right/jump/shift/sprint.
                 boolean fwd = event.getPacket().getBooleans().read(0);
                 boolean bwd = event.getPacket().getBooleans().read(1);
                 boolean left = event.getPacket().getBooleans().read(2);
                 boolean right = event.getPacket().getBooleans().read(3);
-
                 forward = fwd ? 1f : (bwd ? -1f : 0f);
-                // Igual que en el formato viejo: "sideways" positivo = hacia la izquierda.
                 sideways = left ? 1f : (right ? -1f : 0f);
             } else if (floatCount >= 2) {
                 // Formato viejo (hasta 1.21.1 aprox): dos floats, sideways=0, forward=1.
                 sideways = event.getPacket().getFloat().read(0);
                 forward = event.getPacket().getFloat().read(1);
             } else {
-                if (loggedUnknownFormat.compareAndSet(false, true)) {
-                    plugin.getLogger().warning(
-                            "SnakePlugin: no reconozco el formato del paquete de input de esta version de "
-                                    + "Minecraft (booleans=" + booleanCount + ", floats=" + floatCount
-                                    + "). El control WASD no va a funcionar hasta que se actualice "
-                                    + "SnakeSteerPacketListener para este formato.");
+                // Ni floats ni booleans "planos": probablemente el record Input anidado
+                // (1.21.4+). Ultimo recurso: leer el paquete NMS crudo por reflexion.
+                Object handle = event.getPacket().getHandle();
+                if (handle == null || !setupReflectionIfNeeded(handle)) {
+                    if (loggedUnknownFormat.compareAndSet(false, true)) {
+                        plugin.getLogger().warning(
+                                "SnakePlugin: no reconozco el formato del paquete de input de esta "
+                                        + "version de Minecraft (booleans=" + booleanCount + ", floats="
+                                        + floatCount + ", y la busqueda por reflexion tampoco encontro "
+                                        + "forward/backward/left/right). El control WASD no va a "
+                                        + "funcionar hasta que se actualice SnakeSteerPacketListener.");
+                    }
+                    return;
                 }
-                return;
+
+                Object input = inputAccessor.invoke(handle);
+                boolean fwd = (boolean) forwardAccessor.invoke(input);
+                boolean bwd = (boolean) backwardAccessor.invoke(input);
+                boolean left = (boolean) leftAccessor.invoke(input);
+                boolean right = (boolean) rightAccessor.invoke(input);
+                forward = fwd ? 1f : (bwd ? -1f : 0f);
+                sideways = left ? 1f : (right ? -1f : 0f);
             }
 
-            // OJO: sideways/forward son RELATIVOS a hacia donde mira la camara del jugador en
-            // ese instante, no coordenadas absolutas del mundo. Como la camara es libre, hay
-            // que rotar ese vector por el yaw del jugador para saber a que direccion de la
-            // rejilla (norte/sur/este/oeste) corresponde realmente.
+            // sideways/forward son RELATIVOS a hacia donde mira la camara del jugador en ese
+            // instante, no coordenadas absolutas del mundo. Como la camara es libre, hay que
+            // rotar ese vector por el yaw del jugador para saber a que direccion de la rejilla
+            // (norte/sur/este/oeste) corresponde realmente.
             Direction requested = directionFromInput(sideways, forward, player.getLocation().getYaw());
             if (requested != null) {
                 gameManager.requestDirection(player, requested);
@@ -125,6 +153,72 @@ public class SnakeSteerPacketListener {
             if (loggedUnknownFormat.compareAndSet(false, true)) {
                 plugin.getLogger().warning("SnakePlugin: error leyendo el paquete de input: " + e);
             }
+        }
+    }
+
+    /**
+     * Busca, una sola vez (y cachea el resultado), un metodo sin argumentos en la clase del
+     * paquete NMS que devuelva un objeto con metodos booleanos forward()/backward()/left()/
+     * right() — es decir, el record "Input" anidado del formato nuevo. No fija nombres de
+     * paquete/clase de Minecraft a mano (esos cambian entre versiones); busca por forma,
+     * no por nombre de clase.
+     */
+    private boolean setupReflectionIfNeeded(Object handle) {
+        if (reflectionAttempted) {
+            return inputAccessor != null;
+        }
+        synchronized (reflectionLock) {
+            if (reflectionAttempted) {
+                return inputAccessor != null;
+            }
+            reflectionAttempted = true;
+            try {
+                for (Method m : handle.getClass().getMethods()) {
+                    if (m.getParameterCount() != 0) {
+                        continue;
+                    }
+                    Class<?> returnType = m.getReturnType();
+                    if (returnType.isPrimitive() || returnType == String.class || returnType == Class.class) {
+                        continue;
+                    }
+                    Object candidate;
+                    try {
+                        candidate = m.invoke(handle);
+                    } catch (Exception ex) {
+                        continue;
+                    }
+                    if (candidate == null) {
+                        continue;
+                    }
+                    Method fwd = findBooleanAccessor(candidate.getClass(), "forward");
+                    Method bwd = findBooleanAccessor(candidate.getClass(), "backward");
+                    Method left = findBooleanAccessor(candidate.getClass(), "left");
+                    Method right = findBooleanAccessor(candidate.getClass(), "right");
+                    if (fwd != null && bwd != null && left != null && right != null) {
+                        inputAccessor = m;
+                        forwardAccessor = fwd;
+                        backwardAccessor = bwd;
+                        leftAccessor = left;
+                        rightAccessor = right;
+                        plugin.getLogger().info(
+                                "SnakePlugin: formato de input detectado por reflexion (" + m.getName()
+                                        + "() -> " + candidate.getClass().getSimpleName() + ").");
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("SnakePlugin: fallo inspeccionando el paquete de input por reflexion: " + e);
+            }
+            return false;
+        }
+    }
+
+    private static Method findBooleanAccessor(Class<?> type, String name) {
+        try {
+            Method m = type.getMethod(name);
+            return m.getReturnType() == boolean.class ? m : null;
+        } catch (NoSuchMethodException e) {
+            return null;
         }
     }
 
@@ -141,16 +235,12 @@ public class SnakeSteerPacketListener {
 
         double yawRad = Math.toRadians(yawDegrees);
 
-        // Vector "hacia adelante" en el mundo, segun hacia donde mira el jugador
-        // (misma convencion que Location#getDirection(): yaw 0 = sur, 90 = oeste...).
         double forwardX = -Math.sin(yawRad);
         double forwardZ = Math.cos(yawRad);
 
-        // Vector "hacia la izquierda del jugador" en el mundo (perpendicular al anterior).
         double leftX = Math.cos(yawRad);
         double leftZ = Math.sin(yawRad);
 
-        // "sideways" es positivo hacia la izquierda del jugador.
         double worldX = forward * forwardX + sideways * leftX;
         double worldZ = forward * forwardZ + sideways * leftZ;
 
