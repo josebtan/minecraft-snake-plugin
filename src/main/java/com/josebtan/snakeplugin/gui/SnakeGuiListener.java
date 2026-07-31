@@ -7,7 +7,6 @@ import com.josebtan.snakeplugin.game.SnakeColor;
 import com.josebtan.snakeplugin.game.SnakeGame;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -216,15 +215,14 @@ public class SnakeGuiListener implements Listener {
     }
 
     /** El jugador hizo clic en el resultado del yunque falso: ese texto es el nombre elegido. */
+    @SuppressWarnings("deprecation")
     private void handleArenaNameChosen(Player player, ItemStack result) {
         if (result == null || result.getItemMeta() == null || !result.getItemMeta().hasDisplayName()) {
             player.sendMessage(Component.text("Escribe un nombre valido para la arena.", NamedTextColor.RED));
             return;
         }
 
-        String name = PlainTextComponentSerializer.plainText()
-                .serialize(result.getItemMeta().displayName())
-                .trim();
+        String name = result.getItemMeta().getDisplayName().trim();
         if (name.isEmpty()) {
             player.sendMessage(Component.text("Escribe un nombre valido para la arena.", NamedTextColor.RED));
             return;

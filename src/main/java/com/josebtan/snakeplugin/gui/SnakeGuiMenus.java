@@ -163,17 +163,21 @@ public final class SnakeGuiMenus {
     /**
      * Abre el "yunque falso" para que el jugador escriba el nombre de la nueva arena
      * (ver ArenaNameAnvilHolder para el detalle de como funciona el truco).
+     *
+     * NOTA: aqui se usa el titulo/nombre "clasico" (String), no Adventure Component,
+     * a proposito: es la forma mas compatible de crear un inventario de tipo ANVIL y
+     * de leer despues el texto que el jugador escribio en el.
      */
+    @SuppressWarnings("deprecation")
     public static void openArenaNameAnvil(Player player, String defaultName) {
         ArenaNameAnvilHolder holder = new ArenaNameAnvilHolder();
-        Inventory inventory = Bukkit.createInventory(holder, InventoryType.ANVIL,
-                Component.text("Nombre de la arena"));
+        Inventory inventory = Bukkit.createInventory(holder, InventoryType.ANVIL, "Nombre de la arena");
         holder.setInventory(inventory);
 
         ItemStack nameItem = new ItemStack(Material.PAPER);
         ItemMeta meta = nameItem.getItemMeta();
         if (meta != null) {
-            meta.displayName(Component.text(defaultName));
+            meta.setDisplayName(defaultName);
             nameItem.setItemMeta(meta);
         }
         inventory.setItem(0, nameItem);
