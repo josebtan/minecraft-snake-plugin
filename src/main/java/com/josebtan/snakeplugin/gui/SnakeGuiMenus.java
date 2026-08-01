@@ -11,7 +11,6 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -30,8 +29,8 @@ import java.util.Set;
  *     bloquea nada.
  *  3. Menu de LISTA DE ARENAS: para elegir una arena (a la que unirse, o para
  *     eliminarla, segun el modo).
- *  4. Panel de CREACION/ADMINISTRACION de arenas: marcar esquinas, crear (via el
- *     "yunque falso" para escribir el nombre), ver y eliminar.
+ *  4. Panel de CREACION/ADMINISTRACION de arenas: marcar esquinas, crear (pide el
+ *     nombre por chat), ver y eliminar.
  *
  * SnakeGuiListener es quien reacciona a los clics dentro de estos inventarios.
  */
@@ -122,7 +121,7 @@ public final class SnakeGuiMenus {
 
     /**
      * Abre el panel de creacion/administracion de arenas: marcar esquinas, crear
-     * (via yunque falso), ver la lista, o eliminar una.
+     * (pide el nombre por chat), ver la lista, o eliminar una.
      */
     public static void openArenaCreateMenu(Player player, ArenaManager arenaManager) {
         ArenaCreateMenuHolder holder = new ArenaCreateMenuHolder();
@@ -156,31 +155,6 @@ public final class SnakeGuiMenus {
                 List.of("Lista las arenas ya creadas.")));
         inventory.setItem(8, buildItem(Material.BARRIER, NamedTextColor.RED, "Eliminar arena",
                 List.of("Elige una arena existente", "para eliminarla.")));
-
-        player.openInventory(inventory);
-    }
-
-    /**
-     * Abre el "yunque falso" para que el jugador escriba el nombre de la nueva arena
-     * (ver ArenaNameAnvilHolder para el detalle de como funciona el truco).
-     *
-     * NOTA: aqui se usa el titulo/nombre "clasico" (String), no Adventure Component,
-     * a proposito: es la forma mas compatible de crear un inventario de tipo ANVIL y
-     * de leer despues el texto que el jugador escribio en el.
-     */
-    @SuppressWarnings("deprecation")
-    public static void openArenaNameAnvil(Player player, String defaultName) {
-        ArenaNameAnvilHolder holder = new ArenaNameAnvilHolder();
-        Inventory inventory = Bukkit.createInventory(holder, InventoryType.ANVIL, "Nombre de la arena");
-        holder.setInventory(inventory);
-
-        ItemStack nameItem = new ItemStack(Material.PAPER);
-        ItemMeta meta = nameItem.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(defaultName);
-            nameItem.setItemMeta(meta);
-        }
-        inventory.setItem(0, nameItem);
 
         player.openInventory(inventory);
     }

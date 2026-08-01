@@ -7,31 +7,48 @@ import com.josebtan.snakeplugin.game.SnakeColor;
 import com.josebtan.snakeplugin.game.SnakeGame;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 
+import java.util.Collections;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Reacciona a los clics dentro de todos los menus de SnakeGuiMenus. Los inventarios
- * estan llenos de items "reales" (lana, cabezas de jugador, barreras, papel), asi que
- * es imprescindible cancelar SIEMPRE cualquier clic o arrastre mientras uno de estos
+ * estan llenos de items "reales" (lana, cabezas de jugador, barreras), asi que es
+ * imprescindible cancelar SIEMPRE cualquier clic o arrastre mientras uno de estos
  * menus este abierto — si no, el jugador podria sacarse literalmente los items del
  * menu al inventario normal.
+ *
+ * Tambien gestiona el "modo espera de nombre": al pulsar "Crear arena" en el panel,
+ * se cierra el menu y se le pide escribir el nombre por chat. Se probo primero con un
+ * "yunque falso" (InventoryType.ANVIL + PrepareAnvilEvent) para no salir de la GUI,
+ * pero resulto ser poco fiable en la practica (Bukkit a veces descarta el resultado
+ * segun su propia logica interna de reparacion, aunque se fuerce con el evento) — asi
+ * que se cambio a este metodo, mucho mas simple y predecible.
  */
 public class SnakeGuiListener implements Listener {
 
+    private final Plugin plugin;
     private final GameManager gameManager;
     private final ArenaManager arenaManager;
 
-    public SnakeGuiListener(GameManager gameManager, ArenaManager arenaManager) {
+    /** Jugadores de los que se espera que el proximo mensaje de chat sea el nombre de una arena. */
+    private final Set<UUID> awaitingArenaName = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+    public SnakeGuiListener(Plugin plugin, GameManager gameManager, ArenaManager arenaManager) {
+        this.plugin = plugin;
         this.gameManager = gameManager;
         this.arenaManager = arenaManager;
     }
@@ -43,44 +60,6 @@ public class SnakeGuiListener implements Listener {
         }
     }
 
-    /**
-     * Copia el nombre que el jugador va escribiendo en el yunque falso al slot de
-     * resultado, sin aplicar ninguna receta real (no hace falta segundo item, no gasta
-     * experiencia). Ver ArenaNameAnvilHolder para el detalle completo del truco.
-     *
-     * OJO: el texto tecleado en el cuadro de renombrar del yunque NO se refleja solo en
-     * el item del slot 0 (ese conserva su nombre original tal como se puso al abrir el
-     * menu) — Bukkit lo expone aparte, via AnvilInventory#getRenameText(). Por eso hay
-     * que leerlo de ahi explicitamente y aplicarlo nosotros mismos al item de resultado;
-     * si solo clonaramos el item del slot 0 (como se hacia antes), el resultado siempre
-     * tendria el nombre por defecto sin importar lo que el jugador escribiera, y luego
-     * el clic en "nombre" pareceria "invalido" (en realidad no era invalido: el chequeo
-     * de handleArenaNameChosen solo veia el nombre de base, nunca el tecleado).
-     */
-    @EventHandler
-    @SuppressWarnings("deprecation")
-    public void onPrepareAnvil(PrepareAnvilEvent event) {
-        if (!(event.getInventory().getHolder() instanceof ArenaNameAnvilHolder)) {
-            return;
-        }
-        ItemStack base = event.getInventory().getItem(0);
-        if (base == null) {
-            event.setResult(null);
-            return;
-        }
-
-        ItemStack result = base.clone();
-        String typedName = event.getInventory().getRenameText();
-        if (typedName != null && !typedName.isEmpty()) {
-            var meta = result.getItemMeta();
-            if (meta != null) {
-                meta.setDisplayName(typedName);
-                result.setItemMeta(meta);
-            }
-        }
-        event.setResult(result);
-    }
-
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         Inventory top = event.getView().getTopInventory();
@@ -90,27 +69,13 @@ public class SnakeGuiListener implements Listener {
             return;
         }
 
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            event.setCancelled(true);
-            return;
-        }
-
-        // El yunque falso necesita un trato especial: el slot de resultado (2) SI se
-        // procesa (para leer el nombre escrito), el resto se cancela sin mas (para que
-        // no se pueda sacar el papel base ni meter materiales de verdad).
-        if (holder instanceof ArenaNameAnvilHolder) {
-            event.setCancelled(true);
-            if (event.getClickedInventory() != null && event.getClickedInventory().equals(top)
-                    && event.getSlot() == ArenaNameAnvilHolder.RESULT_SLOT) {
-                handleArenaNameChosen(player, event.getCurrentItem());
-            }
-            return;
-        }
-
-        // Cancelar SIEMPRE en el resto de menus: evita sacar items, tanto haciendo clic
-        // dentro del propio menu como con shift-clic desde el inventario normal.
+        // Cancelar SIEMPRE: evita sacar items del menu, tanto haciendo clic dentro del
+        // propio menu como con shift-clic desde el inventario normal del jugador.
         event.setCancelled(true);
 
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
         // Solo nos interesan los clics dentro del menu en si (no en el inventario del jugador).
         if (event.getClickedInventory() == null || !event.getClickedInventory().equals(top)) {
             return;
@@ -125,6 +90,46 @@ public class SnakeGuiListener implements Listener {
         } else if (holder instanceof ArenaCreateMenuHolder) {
             handleArenaCreateClick(player, event.getSlot());
         }
+    }
+
+    /**
+     * Captura el nombre escrito por un jugador que acaba de pulsar "Crear arena". Se
+     * cancela el evento para que ese mensaje no se difunda como chat normal.
+     *
+     * NOTA: AsyncPlayerChatEvent se dispara FUERA del hilo principal del servidor —
+     * por eso el trabajo real (crear la arena, tocar el mundo/el archivo) se
+     * reprograma con Bukkit.getScheduler().runTask(...) antes de tocar cualquier
+     * API de Bukkit que no sea segura para llamar desde otro hilo.
+     */
+    @EventHandler
+    public void onAsyncPlayerChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        if (!awaitingArenaName.remove(player.getUniqueId())) {
+            return;
+        }
+        event.setCancelled(true);
+        String typed = event.getMessage().trim();
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (typed.isEmpty() || typed.equalsIgnoreCase("cancelar")) {
+                player.sendMessage(Component.text("Creacion de arena cancelada.", NamedTextColor.YELLOW));
+                return;
+            }
+            Arena arena = arenaManager.createFromPending(player, typed);
+            if (arena == null) {
+                player.sendMessage(Component.text(
+                        "Falta marcar pos1 y pos2 (en el mismo mundo) antes de crear la arena.",
+                        NamedTextColor.RED));
+                return;
+            }
+            player.sendMessage(Component.text("Arena '" + typed + "' creada y guardada.", NamedTextColor.GREEN));
+        });
+    }
+
+    /** Si el jugador se desconecta con una peticion de nombre pendiente, se olvida sin mas. */
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        awaitingArenaName.remove(event.getPlayer().getUniqueId());
     }
 
     private void handleModeClick(Player player, ModeMenuHolder holder, int slot) {
@@ -225,8 +230,9 @@ public class SnakeGuiListener implements Listener {
                     return;
                 }
                 player.closeInventory();
-                String defaultName = "Arena" + (arenaManager.getArenas().size() + 1);
-                SnakeGuiMenus.openArenaNameAnvil(player, defaultName);
+                awaitingArenaName.add(player.getUniqueId());
+                player.sendMessage(Component.text(
+                        "Escribe el nombre de la arena en el chat (o 'cancelar').", NamedTextColor.AQUA));
             }
             case 8 -> { // Eliminar arena
                 player.closeInventory();
@@ -238,30 +244,6 @@ public class SnakeGuiListener implements Listener {
         }
     }
 
-    /** El jugador hizo clic en el resultado del yunque falso: ese texto es el nombre elegido. */
-    @SuppressWarnings("deprecation")
-    private void handleArenaNameChosen(Player player, ItemStack result) {
-        if (result == null || result.getItemMeta() == null || !result.getItemMeta().hasDisplayName()) {
-            player.sendMessage(Component.text("Escribe un nombre valido para la arena.", NamedTextColor.RED));
-            return;
-        }
-
-        String name = result.getItemMeta().getDisplayName().trim();
-        if (name.isEmpty()) {
-            player.sendMessage(Component.text("Escribe un nombre valido para la arena.", NamedTextColor.RED));
-            return;
-        }
-
-        player.closeInventory();
-        Arena arena = arenaManager.createFromPending(player, name);
-        if (arena == null) {
-            player.sendMessage(Component.text(
-                    "Falta marcar pos1 y pos2 (en el mismo mundo) antes de crear la arena.", NamedTextColor.RED));
-            return;
-        }
-        player.sendMessage(Component.text("Arena '" + name + "' creada y guardada.", NamedTextColor.GREEN));
-    }
-
     private boolean isOurMenu(Inventory inventory) {
         return isOurHolder(inventory.getHolder());
     }
@@ -270,7 +252,6 @@ public class SnakeGuiListener implements Listener {
         return holder instanceof ModeMenuHolder
                 || holder instanceof ColorMenuHolder
                 || holder instanceof ArenaListMenuHolder
-                || holder instanceof ArenaCreateMenuHolder
-                || holder instanceof ArenaNameAnvilHolder;
+                || holder instanceof ArenaCreateMenuHolder;
     }
 }

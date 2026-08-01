@@ -50,9 +50,8 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   Todo el flujo tiene menus (GUI), no solo comandos de texto:
   - `/snake arena` (o `/snake arena menu`) abre un **panel de
     creacion/administracion**: marcar esquina 1/2 con un clic (en tu
-    posicion actual), crear (te pide el nombre con un truco de "yunque
-    falso" — el cuadro de texto nativo de renombrar, sin gastar experiencia
-    ni materiales), ver la lista, o eliminar una.
+    posicion actual), crear (te pide el nombre por chat), ver la lista, o
+    eliminar una.
   - `/snake join` (sin nombre) abre un **listado de arenas existentes**
     para elegir con un clic.
   - Elegir una arena (desde el listado o con `/snake join <nombre>`) abre el
@@ -116,12 +115,11 @@ localmente (pestaña **Actions** del repositorio → build → Artifacts).
    juego y haz clic en "Marcar esquina 1" (se marca en tu posicion actual);
    ve hasta la esquina opuesta, vuelve a abrir el panel y haz clic en
    "Marcar esquina 2". Una vez marcadas ambas, haz clic en "Crear arena": se
-   abre un **yunque falso** donde escribes el nombre (usando el cuadro de
-   texto nativo de renombrar) y confirmas haciendo clic en el resultado. Solo
-   registra el rectangulo (y lo guarda en disco), no toca ningun bloque. Si
-   quieres delimitar visualmente la zona (paredes, decoracion, lo que sea),
-   construyelo tu mismo con normalidad — esos bloques funcionaran igual como
-   obstaculos para la serpiente.
+   te pedira escribir el nombre por el **chat** (o escribir "cancelar" para
+   abortar). Solo registra el rectangulo (y lo guarda en disco), no toca
+   ningun bloque. Si quieres delimitar visualmente la zona (paredes,
+   decoracion, lo que sea), construyelo tu mismo con normalidad — esos
+   bloques funcionaran igual como obstaculos para la serpiente.
 4. Cualquier jugador ejecuta `/snake join` (sin nombre): se abre un
    **listado de arenas existentes** para elegir una con un clic. (Tambien
    puedes ir directo con `/snake join <nombre>` si ya sabes el nombre.)
