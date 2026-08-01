@@ -47,14 +47,38 @@ public class SnakeGuiListener implements Listener {
      * Copia el nombre que el jugador va escribiendo en el yunque falso al slot de
      * resultado, sin aplicar ninguna receta real (no hace falta segundo item, no gasta
      * experiencia). Ver ArenaNameAnvilHolder para el detalle completo del truco.
+     *
+     * OJO: el texto tecleado en el cuadro de renombrar del yunque NO se refleja solo en
+     * el item del slot 0 (ese conserva su nombre original tal como se puso al abrir el
+     * menu) — Bukkit lo expone aparte, via AnvilInventory#getRenameText(). Por eso hay
+     * que leerlo de ahi explicitamente y aplicarlo nosotros mismos al item de resultado;
+     * si solo clonaramos el item del slot 0 (como se hacia antes), el resultado siempre
+     * tendria el nombre por defecto sin importar lo que el jugador escribiera, y luego
+     * el clic en "nombre" pareceria "invalido" (en realidad no era invalido: el chequeo
+     * de handleArenaNameChosen solo veia el nombre de base, nunca el tecleado).
      */
     @EventHandler
+    @SuppressWarnings("deprecation")
     public void onPrepareAnvil(PrepareAnvilEvent event) {
         if (!(event.getInventory().getHolder() instanceof ArenaNameAnvilHolder)) {
             return;
         }
-        ItemStack typed = event.getInventory().getItem(0);
-        event.setResult(typed != null ? typed.clone() : null);
+        ItemStack base = event.getInventory().getItem(0);
+        if (base == null) {
+            event.setResult(null);
+            return;
+        }
+
+        ItemStack result = base.clone();
+        String typedName = event.getInventory().getRenameText();
+        if (typedName != null && !typedName.isEmpty()) {
+            var meta = result.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName(typedName);
+                result.setItemMeta(meta);
+            }
+        }
+        event.setResult(result);
     }
 
     @EventHandler
