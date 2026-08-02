@@ -63,14 +63,22 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   o mas adelante la cola propia/ajena), la partida termina ahi mismo. El
   punto de aparicion es aleatorio dentro de la arena, verificando que haya
   espacio libre por delante para no chocar nada mas entrar.
-- [ ] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
-  Generacion aleatoria de comida dentro del campo y sistema de puntuacion.
-  La deteccion de choques de la Etapa 2 habra que ampliarla: en vez de tratar
-  cualquier bloque no-aire como choque, primero revisar si es comida/power-up.
-- [ ] **Etapa 4 — Mecanica de movimiento y crecimiento de la cola.**
-  La cola sigue exactamente el recorrido de la cabeza y crece al comer,
-  incluyendo la deteccion de colision contra la propia cola / la de otros
-  jugadores (usando el mismo chequeo de "bloque no-aire" de la Etapa 2).
+- [x] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
+  Cada arena tiene su propia comida (un bloque de glowstone, bien visible),
+  compartida por todos los jugadores que esten jugando ahi a la vez — el
+  primero que la alcance se la come. Al comer, suma un punto (aviso por
+  action bar, para no llenar el chat) y aparece una comida nueva en otro
+  sitio libre de la misma arena.
+- [x] **Etapa 4 — Mecanica de movimiento y crecimiento de la cola.**
+  La cola ahora es real: sigue exactamente el recorrido de la cabeza y
+  crece en 1 cada vez que se come. La deteccion de choques (el mismo
+  chequeo "bloque no-aire" de la Etapa 2) ya cubre solo con eso la colision
+  contra la propia cola y contra la de otros jugadores en la misma arena,
+  sin logica aparte — con un caso especial: moverse justo a la casilla que
+  la punta de la propia cola esta por dejar libre en ese mismo instante SI
+  se permite (regla estandar del Snake clasico), para que dar una vuelta
+  cerrada del largo exacto de la serpiente no cuente como choque injusto.
+  Al chocar, el mensaje final incluye la puntuacion.
 
 ## Requisitos para compilar
 

@@ -1,7 +1,9 @@
 package com.josebtan.snakeplugin.game;
 
 import com.josebtan.snakeplugin.arena.Arena;
+import com.josebtan.snakeplugin.food.FoodManager;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -28,6 +30,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * ETAPA 2: startGame ahora exige una Arena (campo delimitado), y el bucle de
  * movimiento termina automaticamente la partida de cualquier jugador cuya
  * serpiente choque (ver SnakeGame#tick).
+ *
+ * ETAPA 3/4: cada Arena tiene su propia comida (ver FoodManager, compartida por todos
+ * los jugadores que jueguen ahi), y startGame se asegura de que haya una activa al
+ * arrancar una partida. El bucle de movimiento ahora reacciona a los tres resultados
+ * posibles de un tick (vivo / comio / choco) en vez de un simple booleano.
  */
 public class GameManager {
 
@@ -36,10 +43,15 @@ public class GameManager {
 
     private final Plugin plugin;
     private final Map<UUID, SnakeGame> games = new ConcurrentHashMap<>();
+    private final FoodManager foodManager = new FoodManager();
     private BukkitTask movementTask;
 
     public GameManager(Plugin plugin) {
         this.plugin = plugin;
+    }
+
+    public FoodManager getFoodManager() {
+        return foodManager;
     }
 
     /**
@@ -59,6 +71,7 @@ public class GameManager {
             return null;
         }
         games.put(id, game);
+        foodManager.ensureFoodSpawned(arena);
 
         ensureLoopRunning();
         return game;
@@ -122,19 +135,36 @@ public class GameManager {
 
     /**
      * Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y su asiento, con el jugador
-     * encima) una casilla. Si SnakeGame#tick() devuelve false, esa serpiente acaba de
-     * chocar: se termina su partida aqui mismo (limpieza + aviso al jugador).
+     * encima) una casilla. Reacciona al TickResult de SnakeGame#tick:
+     *   - COLLIDED: esa serpiente acaba de chocar, se termina su partida aqui mismo.
+     *   - ATE: comio y crecio, se avisa del punto (action bar, para no llenar el chat en
+     *     partidas donde se come seguido).
+     *   - ALIVE: nada especial que hacer.
      */
     private void tickMovement() {
         for (SnakeGame game : games.values()) {
-            boolean alive = game.tick();
-            if (!alive) {
-                UUID id = game.getPlayerId();
-                games.remove(id);
-                Player player = Bukkit.getPlayer(id);
-                game.stop(player);
-                if (player != null) {
-                    player.sendMessage(Component.text("¡Chocaste! Tu serpiente ha muerto."));
+            TickResult result = game.tick(foodManager);
+            Player player = Bukkit.getPlayer(game.getPlayerId());
+
+            switch (result) {
+                case COLLIDED -> {
+                    games.remove(game.getPlayerId());
+                    game.stop(player);
+                    if (player != null) {
+                        player.sendMessage(Component.text(
+                                "¡Chocaste! Tu serpiente ha muerto. Puntos: " + game.getScore(),
+                                NamedTextColor.RED));
+                    }
+                }
+                case ATE -> {
+                    if (player != null) {
+                        player.sendActionBar(Component.text(
+                                "¡Comiste! Puntos: " + game.getScore() + " | Largo: " + game.getLength(),
+                                NamedTextColor.GOLD));
+                    }
+                }
+                case ALIVE -> {
+                    // Nada que hacer.
                 }
             }
         }

@@ -9,16 +9,16 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Zona de juego: un rectangulo en el plano X/Z, a una altura fija ("boardY"). Define DONDE
- * pueden aparecer los jugadores y (en la Etapa 3) la comida — nada mas.
+ * pueden aparecer los jugadores y la comida — nada mas.
  *
  * IMPORTANTE: la arena ya NO construye paredes ni modifica el mundo de ninguna forma. Eso
  * es cosa del propio jugador: puede decorar/delimitar su arena como quiera (paredes, fosos,
  * decoracion tematica, lo que sea), y esos bloques funcionaran igual como obstaculos porque
  * la deteccion de choques de la serpiente (ver SnakeGame#tick) es deliberadamente simple:
  * "¿el bloque de destino es AIRE?" — si no lo es, hay choque, sea lo que sea ese bloque
- * (pared construida a mano, cola propia, cola de otro jugador en la Etapa 4, o comida/
- * power-ups en la Etapa 3, que tendran que tratarse como caso especial de este mismo
- * chequeo en vez de como choque).
+ * (pared construida a mano, cola propia, cola de otro jugador) es choque, salvo la
+ * comida (ver com.josebtan.snakeplugin.food.FoodManager y SnakeGame#tick), que se
+ * reconoce como caso especial antes de llegar a ese chequeo.
  */
 public class Arena {
 
@@ -71,6 +71,26 @@ public class Arena {
             }
         }
         return true;
+    }
+
+    /**
+     * Busca una unica casilla aleatoria libre (aire) dentro de la arena — usado para la
+     * comida, que no necesita "holgura" en ninguna direccion como el spawn del
+     * jugador, solo un sitio vacio. Reintenta hasta {@code maxAttempts} veces.
+     *
+     * @return la ubicacion elegida, o null si no se encontro ninguna casilla libre.
+     */
+    public Location findRandomFreeCell(int maxAttempts) {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            int x = minX + random.nextInt(maxX - minX + 1);
+            int z = minZ + random.nextInt(maxZ - minZ + 1);
+            Location candidate = new Location(world, x, boardY, z);
+            if (candidate.getBlock().getType() == Material.AIR) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     public String getName() {

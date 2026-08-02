@@ -1,6 +1,7 @@
 package com.josebtan.snakeplugin.game;
 
 import com.josebtan.snakeplugin.arena.Arena;
+import com.josebtan.snakeplugin.food.FoodManager;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.ArmorStand;
@@ -11,21 +12,35 @@ import java.util.Deque;
 import java.util.UUID;
 
 /**
- * Representa la partida de un jugador: su serpiente, posicion de la cabeza,
- * direccion actual y (en etapas futuras) su cola y puntuacion.
+ * Representa la partida de un jugador: su serpiente (cabeza + cola), direccion
+ * actual y puntuacion.
  *
- * ETAPA 2: la partida ahora vive dentro de una Arena (ver com.josebtan.snakeplugin.arena.Arena),
- * que solo define DONDE puede aparecer la serpiente (y, en la Etapa 3, la comida) — ya no
- * construye paredes ni modifica el mundo. Cualquier bloque solido que haya en el camino,
- * puesto por quien sea, cuenta como obstaculo igual (ver #tick).
+ * ETAPA 3/4 (comida y crecimiento): el cuerpo entero se guarda en {@link #body}, una cola
+ * de bloques con la CABEZA siempre al frente (peekFirst) y la punta de la cola al final
+ * (peekLast). Cada llamada a {@link #tick} hace lo siguiente:
+ *   1. Calcula la casilla de destino.
+ *   2. Le pregunta al FoodManager si esa casilla es la comida actual de la arena.
+ *      - Si SI es comida: se come. La serpiente CRECE (no se libera ningun segmento este
+ *        tick) y se le pide al FoodManager una comida nueva en otro sitio.
+ *      - Si NO es comida pero coincide exactamente con la punta de la propia cola (y la
+ *        serpiente no esta creciendo este tick), el movimiento se permite igual: esa
+ *        casilla se libera en el mismo instante en que la cabeza avanza (regla estandar
+ *        del Snake clasico — si no, cualquier vuelta cerrada del largo exacto de la
+ *        serpiente resultaria en un choque "injusto" contra su propia cola que ya se
+ *        estaba yendo).
+ *      - Cualquier otro bloque no-aire (algo que el jugador construyo a mano, la propia
+ *        cola mas alla de ese caso especial, o la cola de otro jugador en la misma arena)
+ *        es choque: la partida termina ahi mismo.
+ *
+ * ETAPA 2 sigue vigente: la partida vive dentro de una Arena (ver
+ * com.josebtan.snakeplugin.arena.Arena), que solo define DONDE puede aparecer la
+ * serpiente y la comida — no construye nada por su cuenta.
  *
  * La camara del jugador queda LIBRE (sin bloqueo cenital): puede mirar a su
  * alrededor con normalidad mientras viaja, como si estuviera sentado en un
  * carrito de minas.
  *
  * Las teclas WASD se leen con ProtocolLib (ver SnakeSteerPacketListener).
- *
- * Sigue sin haber comida/puntos (Etapa 3) ni crecimiento de cola (Etapa 4).
  */
 public class SnakeGame {
 
@@ -58,8 +73,8 @@ public class SnakeGame {
     /** Arena (campo de juego) donde vive esta partida. */
     private Arena arena;
 
-    /** Posicion actual de la cabeza en la rejilla (coordenadas de bloque, Y fija = "boardY"). */
-    private Location headLocation;
+    /** Cuerpo completo de la serpiente: cabeza al frente (peekFirst), punta de cola al final (peekLast). */
+    private final Deque<Location> body = new ArrayDeque<>();
 
     /** Direccion en la que se esta moviendo la cabeza actualmente. */
     private Direction currentDirection;
@@ -72,13 +87,13 @@ public class SnakeGame {
      */
     private Direction requestedDirection;
 
-    /** Cola de segmentos del cuerpo. Vacia por ahora, se usara en la Etapa 4. */
-    private final Deque<Location> tail = new ArrayDeque<>();
-
     /** Asiento invisible (ArmorStand) sobre el que viaja el jugador, pegado al bloque de la cabeza. */
     private ArmorStand seat;
 
     private boolean active = false;
+
+    /** Cuantas veces comio esta partida. */
+    private int score = 0;
 
     public SnakeGame(UUID playerId, SnakeColor color) {
         this.playerId = playerId;
@@ -102,13 +117,15 @@ public class SnakeGame {
             return false;
         }
 
-        this.headLocation = spawn;
+        body.clear();
+        body.addFirst(spawn);
         this.requestedDirection = currentDirection;
         this.active = true;
+        this.score = 0;
 
-        headLocation.getBlock().setType(color.getWoolMaterial());
+        spawn.getBlock().setType(color.getWoolMaterial());
 
-        this.seat = spawnSeat(headLocation);
+        this.seat = spawnSeat(spawn);
         seat.addPassenger(player);
         return true;
     }
@@ -136,9 +153,9 @@ public class SnakeGame {
     }
 
     /**
-     * Detiene la partida: expulsa al jugador del asiento y lo elimina, limpia los
-     * bloques del tablero, y deja al jugador de pie a salvo. 'active' se pone a
-     * false ANTES de expulsarlo para que el listener que evita el desmontaje
+     * Detiene la partida: expulsa al jugador del asiento y lo elimina, limpia TODOS los
+     * bloques del cuerpo (cabeza + cola), y deja al jugador de pie a salvo. 'active' se
+     * pone a false ANTES de expulsarlo para que el listener que evita el desmontaje
      * voluntario sepa que este es intencional.
      */
     public void stop(Player player) {
@@ -150,20 +167,18 @@ public class SnakeGame {
             seat = null;
         }
 
-        if (headLocation != null && player != null) {
-            Location landing = headLocation.clone().add(0.5, 1.0, 0.5);
+        Location head = body.peekFirst();
+        if (head != null && player != null) {
+            Location landing = head.clone().add(0.5, 1.0, 0.5);
             landing.setYaw(player.getLocation().getYaw());
             landing.setPitch(player.getLocation().getPitch());
             player.teleport(landing);
         }
 
-        if (headLocation != null) {
-            headLocation.getBlock().setType(Material.AIR);
-        }
-        for (Location segment : tail) {
+        for (Location segment : body) {
             segment.getBlock().setType(Material.AIR);
         }
-        tail.clear();
+        body.clear();
     }
 
     /**
@@ -180,48 +195,65 @@ public class SnakeGame {
     }
 
     /**
-     * Avanza la cabeza una casilla en la direccion solicitada, y mueve el asiento;
-     * como el jugador es su pasajero, viaja con el automaticamente.
+     * Avanza la cabeza una casilla en la direccion solicitada. Ver el comentario de
+     * clase para el detalle completo de la logica de comer/crecer/chocar.
      *
-     * DETECCION DE CHOQUES (Etapa 2): antes de mover la cabeza, se comprueba el bloque de
-     * destino. Si es AIRE, se puede avanzar con normalidad. Si es cualquier otra cosa —algo
-     * que el propio jugador construyo dentro de su arena, la propia cola, o la cola de otro
-     * jugador (Etapa 4)— se considera un choque y la partida termina aqui mismo. Este mismo
-     * chequeo es el que mas adelante (Etapa 3) habra que ampliar: en vez de tratar CUALQUIER
-     * bloque no-aire como choque, habra que revisar primero si es comida o un power-up (y
-     * actuar en consecuencia) antes de asumir que es un obstaculo.
-     *
-     * En la Etapa 4 aqui es tambien donde la cola empezara a "seguir" a la cabeza.
-     *
-     * @return false si la cabeza choco contra algo (fin de la partida); true si se movio
-     *         con normalidad (o si la partida ya no estaba activa, para no romper el loop).
+     * @return TickResult.COLLIDED si choco (fin de la partida); TickResult.ATE si comio
+     *         (creceio, hay que avisar del punto); TickResult.ALIVE en cualquier otro
+     *         movimiento normal (incluye el caso "partida ya inactiva", para no romper el
+     *         loop del GameManager).
      */
-    public boolean tick() {
-        if (!active || headLocation == null || seat == null) {
-            return true;
+    public TickResult tick(FoodManager foodManager) {
+        if (!active || body.isEmpty() || seat == null) {
+            return TickResult.ALIVE;
         }
 
         this.currentDirection = requestedDirection;
 
-        Location previousHead = headLocation.clone();
-        Location newHead = headLocation.clone().add(currentDirection.getDx(), 0, currentDirection.getDz());
+        Location head = body.peekFirst();
+        Location newHead = head.clone().add(currentDirection.getDx(), 0, currentDirection.getDz());
 
-        if (newHead.getBlock().getType() != Material.AIR) {
-            // Choque: bloque construido por el jugador, cola propia, o cola de otro jugador.
+        boolean isFood = foodManager.isFoodAt(arena, newHead);
+
+        // Caso especial: si la casilla de destino es justo la punta de la propia cola Y no
+        // estamos creciendo este tick, se permite el movimiento — esa casilla se libera en
+        // el mismo instante en que la cabeza avanza (ver comentario de clase).
+        Location tailEnd = body.peekLast();
+        boolean vacatingOwnTail = !isFood && body.size() > 1 && sameBlock(newHead, tailEnd);
+
+        if (!isFood && !vacatingOwnTail && newHead.getBlock().getType() != Material.AIR) {
+            // Choque: algo que el jugador construyo, la propia cola (fuera del caso de
+            // arriba), o la cola de otro jugador en la misma arena.
             active = false;
-            return false;
+            return TickResult.COLLIDED;
+        }
+
+        // Si no comemos, se libera el ultimo segmento (puede ser exactamente newHead, ver
+        // el caso "vacatingOwnTail" de arriba — por eso se limpia ANTES de pintar la
+        // cabeza nueva, para no borrar el bloque recien pintado).
+        if (!isFood) {
+            Location freedSegment = body.removeLast();
+            freedSegment.getBlock().setType(Material.AIR);
         }
 
         newHead.getBlock().setType(color.getWoolMaterial());
+        body.addFirst(newHead);
 
-        // Sin cola todavia (Etapa 4): el bloque anterior se limpia directamente.
-        if (tail.isEmpty()) {
-            previousHead.getBlock().setType(Material.AIR);
-        }
-
-        this.headLocation = newHead;
         seat.teleport(seatLocationFor(newHead));
-        return true;
+
+        if (isFood) {
+            score++;
+            foodManager.consumeAndRespawn(arena);
+            return TickResult.ATE;
+        }
+        return TickResult.ALIVE;
+    }
+
+    private static boolean sameBlock(Location a, Location b) {
+        return a.getWorld().equals(b.getWorld())
+                && a.getBlockX() == b.getBlockX()
+                && a.getBlockY() == b.getBlockY()
+                && a.getBlockZ() == b.getBlockZ();
     }
 
     public UUID getPlayerId() {
@@ -237,7 +269,7 @@ public class SnakeGame {
     }
 
     public Location getHeadLocation() {
-        return headLocation;
+        return body.peekFirst();
     }
 
     public Direction getCurrentDirection() {
@@ -250,5 +282,14 @@ public class SnakeGame {
 
     public boolean isActive() {
         return active;
+    }
+
+    public int getScore() {
+        return score;
+    }
+
+    /** Largo actual de la serpiente (cabeza incluida). */
+    public int getLength() {
+        return body.size();
     }
 }

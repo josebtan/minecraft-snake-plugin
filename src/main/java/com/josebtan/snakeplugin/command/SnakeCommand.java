@@ -30,7 +30,7 @@ import java.util.List;
  *   /snake join <arena>            -> salta directo al menu de modo para esa arena
  *   /snake leave                   -> te levanta y elimina tu serpiente
  *
- * Sigue sin haber comida/puntos (Etapa 3) ni crecimiento de cola (Etapa 4).
+ * La comida ya funciona (una por arena, compartida) y la cola crece al comer.
  */
 public class SnakeCommand implements CommandExecutor, TabCompleter {
 
