@@ -96,7 +96,9 @@ public class GameManager {
     public void stopGame(Player player) {
         SnakeGame game = games.remove(player.getUniqueId());
         if (game != null) {
+            Arena arena = game.getArena();
             game.stop(player);
+            clearFoodIfArenaEmpty(arena);
         }
         if (games.isEmpty()) {
             stopLoop();
@@ -134,6 +136,23 @@ public class GameManager {
     }
 
     /**
+     * Si ya no queda ninguna partida activa en esa arena, limpia su comida (el item se
+     * elimina del mundo). Se llama tras cualquier forma de terminar una partida (salida
+     * voluntaria o choque) — antes esto no se hacia nunca, por lo que la comida (antes un
+     * bloque de glowstone) se quedaba abandonada en el mundo para siempre.
+     */
+    private void clearFoodIfArenaEmpty(Arena arena) {
+        if (arena == null) {
+            return;
+        }
+        boolean stillInUse = games.values().stream()
+                .anyMatch(g -> g.getArena() != null && g.getArena().getName().equalsIgnoreCase(arena.getName()));
+        if (!stillInUse) {
+            foodManager.clear(arena);
+        }
+    }
+
+    /**
      * Se ejecuta cada MOVE_INTERVAL_TICKS: mueve cada cabeza (y su asiento, con el jugador
      * encima) una casilla. Reacciona al TickResult de SnakeGame#tick:
      *   - COLLIDED: esa serpiente acaba de chocar, se termina su partida aqui mismo.
@@ -150,6 +169,7 @@ public class GameManager {
                 case COLLIDED -> {
                     games.remove(game.getPlayerId());
                     game.stop(player);
+                    clearFoodIfArenaEmpty(game.getArena());
                     if (player != null) {
                         player.sendMessage(Component.text(
                                 "¡Chocaste! Tu serpiente ha muerto. Puntos: " + game.getScore(),
@@ -173,13 +193,20 @@ public class GameManager {
         }
     }
 
-    /** Detiene todas las partidas activas, por ejemplo al desactivar el plugin. */
+    /** Detiene todas las partidas activas y limpia toda la comida, por ejemplo al desactivar el plugin. */
     public void stopAll() {
+        Set<Arena> arenas = new HashSet<>();
         for (SnakeGame game : games.values()) {
             Player player = Bukkit.getPlayer(game.getPlayerId());
+            if (game.getArena() != null) {
+                arenas.add(game.getArena());
+            }
             game.stop(player);
         }
         games.clear();
+        for (Arena arena : arenas) {
+            foodManager.clear(arena);
+        }
         stopLoop();
     }
 }

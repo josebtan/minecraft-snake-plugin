@@ -25,7 +25,8 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
   (ver la seccion de dependencias mas abajo): es necesario porque, estando
   sentado en una entidad invisible normal, Minecraft no ofrece ninguna forma
   nativa de saber que tecla pulsa el jugador.
-- Al pasar sobre un bloque de comida, la serpiente **crece**: se anade un nuevo
+- Al pasar sobre la comida (un item de comida real tirado en el suelo — manzana,
+  zanahoria, pan, etc. al azar), la serpiente **crece**: se anade un nuevo
   bloque a la cola, que sigue el recorrido exacto que hizo la cabeza (igual que en
   el Snake clasico).
 - Chocar contra la cola propia, la de otro jugador, o contra el borde del campo de
@@ -64,11 +65,18 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   punto de aparicion es aleatorio dentro de la arena, verificando que haya
   espacio libre por delante para no chocar nada mas entrar.
 - [x] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
-  Cada arena tiene su propia comida (un bloque de glowstone, bien visible),
+  Cada arena tiene su propia comida (un item real tirado en el suelo — manzana,
+  zanahoria, pan, carne, etc. al azar, brillante para que se note bien),
   compartida por todos los jugadores que esten jugando ahi a la vez — el
   primero que la alcance se la come. Al comer, suma un punto (aviso por
   action bar, para no llenar el chat) y aparece una comida nueva en otro
-  sitio libre de la misma arena.
+  sitio libre de la misma arena. La comida se limpia del mundo automaticamente
+  en cuanto ya no queda nadie jugando en esa arena (antes se quedaba
+  abandonada para siempre — bug corregido). La busqueda de sitio libre para
+  la comida tambien se reforzo: antes probaba un numero limitado de
+  posiciones al azar y se rendia, lo que hacia que en partidas con varios
+  jugadores (arena mas ocupada) a veces simplemente no apareciera comida
+  nueva; ahora escanea toda la arena y solo falla si esta completamente llena.
 - [x] **Etapa 4 — Mecanica de movimiento y crecimiento de la cola.**
   La cola ahora es real: sigue exactamente el recorrido de la cabeza y
   crece en 1 cada vez que se come. La deteccion de choques (el mismo

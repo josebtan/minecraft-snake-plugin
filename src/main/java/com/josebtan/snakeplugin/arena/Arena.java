@@ -5,6 +5,8 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -74,23 +76,33 @@ public class Arena {
     }
 
     /**
-     * Busca una unica casilla aleatoria libre (aire) dentro de la arena — usado para la
-     * comida, que no necesita "holgura" en ninguna direccion como el spawn del
-     * jugador, solo un sitio vacio. Reintenta hasta {@code maxAttempts} veces.
+     * Busca una casilla libre (aire) al azar dentro de la arena — usado para la comida, que
+     * no necesita "holgura" en ninguna direccion como el spawn del jugador, solo un sitio
+     * vacio.
      *
-     * @return la ubicacion elegida, o null si no se encontro ninguna casilla libre.
+     * IMPORTANTE: a diferencia de la version anterior (que probaba un numero limitado de
+     * posiciones al azar y se rendia si no acertaba), esto ahora escanea TODAS las celdas
+     * de la arena y elige una libre al azar entre las que encuentre. Es mas caro por
+     * llamada, pero solo se usa al (re)aparecer la comida (no en cada tick), y evita que en
+     * arenas con varias serpientes (mas casillas ocupadas) la comida simplemente no
+     * apareciera por mala suerte con pocos intentos — que es justo lo que pasaba antes en
+     * partidas con varios jugadores.
+     *
+     * @return una ubicacion libre elegida al azar, o null si la arena esta completamente llena.
      */
-    public Location findRandomFreeCell(int maxAttempts) {
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            int x = minX + random.nextInt(maxX - minX + 1);
-            int z = minZ + random.nextInt(maxZ - minZ + 1);
-            Location candidate = new Location(world, x, boardY, z);
-            if (candidate.getBlock().getType() == Material.AIR) {
-                return candidate;
+    public Location findRandomFreeCell() {
+        List<Location> free = new ArrayList<>();
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (world.getBlockAt(x, boardY, z).getType() == Material.AIR) {
+                    free.add(new Location(world, x, boardY, z));
+                }
             }
         }
-        return null;
+        if (free.isEmpty()) {
+            return null;
+        }
+        return free.get(ThreadLocalRandom.current().nextInt(free.size()));
     }
 
     public String getName() {
