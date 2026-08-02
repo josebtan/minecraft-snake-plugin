@@ -9,7 +9,6 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
@@ -354,8 +353,9 @@ public class GameManager {
             }
 
             Scoreboard board = manager.getNewScoreboard();
-            Objective objective = board.registerNewObjective("snake", Criteria.DUMMY,
-                    "Snake: " + arena.getName());
+            @SuppressWarnings("deprecation")
+            Objective objective = board.registerNewObjective("snake", "dummy");
+            objective.setDisplayName("Snake: " + arena.getName());
             objective.setDisplaySlot(DisplaySlot.SIDEBAR);
 
             for (SnakeGame game : arenaGames) {
