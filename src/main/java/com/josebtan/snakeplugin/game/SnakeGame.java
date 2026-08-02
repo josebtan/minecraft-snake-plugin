@@ -90,6 +90,9 @@ public class SnakeGame {
     /** Asiento invisible (ArmorStand) sobre el que viaja el jugador, pegado al bloque de la cabeza. */
     private ArmorStand seat;
 
+    /** Donde estaba parado el jugador justo antes de unirse a la arena — para devolverlo ahi al salir/morir. */
+    private Location returnLocation;
+
     private boolean active = false;
 
     /** Cuantas veces comio esta partida. */
@@ -111,6 +114,7 @@ public class SnakeGame {
     public boolean start(Player player, Arena arena) {
         this.arena = arena;
         this.currentDirection = Direction.SOUTH;
+        this.returnLocation = player.getLocation().clone();
 
         Location spawn = arena.findRandomSpawn(currentDirection, SPAWN_CLEARANCE, SPAWN_MAX_ATTEMPTS);
         if (spawn == null) {
@@ -154,9 +158,10 @@ public class SnakeGame {
 
     /**
      * Detiene la partida: expulsa al jugador del asiento y lo elimina, limpia TODOS los
-     * bloques del cuerpo (cabeza + cola), y deja al jugador de pie a salvo. 'active' se
-     * pone a false ANTES de expulsarlo para que el listener que evita el desmontaje
-     * voluntario sepa que este es intencional.
+     * bloques del cuerpo (cabeza + cola), y devuelve al jugador al sitio exacto donde estaba
+     * parado antes de entrar a la arena (ver {@link #returnLocation}) — tanto si sale
+     * voluntariamente como si murio chocando. 'active' se pone a false ANTES de expulsarlo
+     * para que el listener que evita el desmontaje voluntario sepa que este es intencional.
      */
     public void stop(Player player) {
         active = false;
@@ -167,12 +172,8 @@ public class SnakeGame {
             seat = null;
         }
 
-        Location head = body.peekFirst();
-        if (head != null && player != null) {
-            Location landing = head.clone().add(0.5, 1.0, 0.5);
-            landing.setYaw(player.getLocation().getYaw());
-            landing.setPitch(player.getLocation().getPitch());
-            player.teleport(landing);
+        if (player != null && returnLocation != null) {
+            player.teleport(returnLocation);
         }
 
         for (Location segment : body) {
@@ -192,6 +193,33 @@ public class SnakeGame {
         if (requested != currentDirection.getOpposite()) {
             this.requestedDirection = requested;
         }
+    }
+
+    /**
+     * Calcula a que casilla se moveria esta serpiente en el PROXIMO tick, sin aplicar nada
+     * todavia (no pinta bloques, no mueve el asiento). Lo usa GameManager para detectar
+     * choques de frente ANTES de que nadie se mueva de verdad: si dos serpientes planean
+     * llegar a la misma casilla vacia el mismo tick, hay que decidir quien gana antes de
+     * que la primera en procesarse "gane por accidente" solo por orden de iteracion.
+     *
+     * @return la casilla de destino planeada, o null si la partida no esta activa.
+     */
+    public Location peekNextHead() {
+        if (!active || body.isEmpty()) {
+            return null;
+        }
+        return body.peekFirst().clone().add(requestedDirection.getDx(), 0, requestedDirection.getDz());
+    }
+
+    /**
+     * Marca esta partida como choque INMEDIATO, sin tocar el mundo: se usa cuando esta
+     * serpiente pierde un choque de frente contra otra (ver GameManager#tickMovement) — como
+     * nunca llego a pintar su nueva cabeza, no hay nada que deshacer aqui, solo terminar la
+     * partida.
+     */
+    public TickResult collideHeadOn() {
+        active = false;
+        return TickResult.COLLIDED;
     }
 
     /**

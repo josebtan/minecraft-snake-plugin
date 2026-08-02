@@ -88,6 +88,28 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   cerrada del largo exacto de la serpiente no cuente como choque injusto.
   Al chocar, el mensaje final incluye la puntuacion.
 
+### Analisis de flujo de juego (un jugador / multijugador)
+
+Tras probar las etapas anteriores, se reviso con calma que pasa exactamente
+del principio al fin de una partida en cada modalidad, y se resolvieron
+varios puntos que no estaban definidos:
+
+- **Choque de frente**: si dos serpientes de la misma arena planean moverse a
+  la misma casilla vacia en el mismo instante (o se cruzan, cada una entrando
+  donde estaba la otra), se resuelve ANTES de mover a nadie: gana la
+  serpiente mas larga; si hay empate exacto de tamaño, pierden todas las
+  implicadas en ese choque. Sin esto, ganaba quien se procesara primero por
+  puro orden interno — arbitrario e injusto.
+- **Aviso a toda la arena**: cuando alguien choca, ya no se entera solo el
+  (mensaje privado con su puntuacion) — el resto de jugadores de esa arena
+  reciben un aviso tambien.
+- **Regreso al salir/morir**: al terminar la partida (por chocar o con
+  `/snake leave`), el jugador vuelve exactamente al sitio donde estaba parado
+  antes de entrar a la arena — no se queda flotando dentro de ella.
+- **Marcador lateral en vivo**: mientras juegas, un scoreboard en la barra
+  lateral muestra la puntuacion de todos los jugadores activos en tu misma
+  arena, actualizado al unirse, salir o comer alguien.
+
 ## Requisitos para compilar
 
 - Java 17+
