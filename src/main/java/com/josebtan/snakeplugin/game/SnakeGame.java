@@ -61,11 +61,8 @@ public class SnakeGame {
      */
     private static final double SEAT_HEIGHT = 0.0;
 
-    /** Cuantas casillas libres por delante se exigen al elegir el punto de spawn (ver Arena#findRandomSpawn). */
+    /** Cuantas casillas libres por delante (en la direccion elegida) se exigen al elegir el punto de spawn. */
     private static final int SPAWN_CLEARANCE = 3;
-
-    /** Cuantos intentos de posicion aleatoria se prueban antes de rendirse. */
-    private static final int SPAWN_MAX_ATTEMPTS = 40;
 
     private final UUID playerId;
     private final SnakeColor color;
@@ -110,9 +107,11 @@ public class SnakeGame {
     }
 
     /**
-     * Inicia la partida dentro de la arena dada: elige una posicion aleatoria segura (con
-     * espacio libre por delante, ver Arena#findRandomSpawn) para la cabeza (bloque de lana
-     * real), crea el asiento invisible justo encima, y monta al jugador en el.
+     * Inicia la partida dentro de la arena dada: elige una posicion Y direccion inicial
+     * aleatorias y seguras (con espacio libre por delante en esa direccion — ver
+     * Arena#findRandomSpawn, que prueba las 4 direcciones en cada celda, no solo "sur")
+     * para la cabeza (bloque de lana real), crea el asiento invisible justo encima, y
+     * monta al jugador en el.
      *
      * @param multiplayer el modo elegido en el menu (ver com.josebtan.snakeplugin.gui.ModeMenu):
      *                     decide que tipo de scoreboard se le muestra a ESTE jugador (ver
@@ -123,25 +122,25 @@ public class SnakeGame {
      */
     public boolean start(Player player, Arena arena, boolean multiplayer) {
         this.arena = arena;
-        this.currentDirection = Direction.SOUTH;
         this.returnLocation = player.getLocation().clone();
         this.multiplayer = multiplayer;
         this.startTimeMillis = System.currentTimeMillis();
 
-        Location spawn = arena.findRandomSpawn(currentDirection, SPAWN_CLEARANCE, SPAWN_MAX_ATTEMPTS);
+        Arena.ArenaSpawn spawn = arena.findRandomSpawn(SPAWN_CLEARANCE);
         if (spawn == null) {
             return false;
         }
+        this.currentDirection = spawn.direction();
 
         body.clear();
-        body.addFirst(spawn);
+        body.addFirst(spawn.location());
         this.requestedDirection = currentDirection;
         this.active = true;
         this.score = 0;
 
-        spawn.getBlock().setType(color.getWoolMaterial());
+        spawn.location().getBlock().setType(color.getWoolMaterial());
 
-        this.seat = spawnSeat(spawn);
+        this.seat = spawnSeat(spawn.location());
         seat.addPassenger(player);
         return true;
     }

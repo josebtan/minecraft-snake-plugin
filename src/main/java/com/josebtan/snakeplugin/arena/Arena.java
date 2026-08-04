@@ -43,24 +43,40 @@ public class Arena {
     }
 
     /**
-     * Busca un punto aleatorio dentro de la arena donde sea seguro aparecer: el bloque de
-     * esa casilla debe ser aire, Y ademas debe haber al menos {@code clearance} casillas
-     * libres por delante en la direccion en la que la serpiente arrancara a moverse — para
-     * no chocar contra algo (por ejemplo una pared que el jugador construyo pegada al borde)
-     * justo al entrar. Reintenta hasta {@code maxAttempts} veces antes de rendirse.
+     * Busca un punto y una direccion inicial validos para aparecer: la celda debe ser
+     * aire, Y ademas debe haber al menos {@code clearance} casillas libres por delante en
+     * ESA direccion — para no arrancar mirando de frente contra algo (una pared que el
+     * jugador construyo, el borde de un pasillo angosto, etc.) y chocar en el primer paso.
      *
-     * @return la ubicacion elegida, o null si no se encontro ningun sitio libre.
+     * A diferencia de la version anterior (direccion siempre fija a "sur", con un numero
+     * limitado de intentos al azar), esto escanea TODAS las celdas de la arena Y las 4
+     * direcciones posibles en cada una, y elige al azar entre TODAS las combinaciones
+     * validas que encuentre. Esto hace falta para arenas con formas irregulares: un
+     * pasillo angosto puede no tener NINGUNA celda con espacio libre hacia el sur, pero si
+     * tener de sobra mirando hacia el este, por ejemplo — con una direccion fija eso se
+     * perdia por completo aunque la arena tuviera sitio de sobra.
+     *
+     * @return la celda y direccion elegidas, o null si la arena no tiene NINGUNA
+     *         combinacion (celda, direccion) valida ahora mismo.
      */
-    public Location findRandomSpawn(Direction initialDirection, int clearance, int maxAttempts) {
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            int x = minX + random.nextInt(maxX - minX + 1);
-            int z = minZ + random.nextInt(maxZ - minZ + 1);
-            if (hasClearPath(x, z, initialDirection, clearance)) {
-                return new Location(world, x, boardY, z);
+    public ArenaSpawn findRandomSpawn(int clearance) {
+        List<ArenaSpawn> candidates = new ArrayList<>();
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (world.getBlockAt(x, boardY, z).getType() != Material.AIR) {
+                    continue;
+                }
+                for (Direction direction : Direction.values()) {
+                    if (hasClearPath(x, z, direction, clearance)) {
+                        candidates.add(new ArenaSpawn(new Location(world, x, boardY, z), direction));
+                    }
+                }
             }
         }
-        return null;
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
     }
 
     /** Comprueba que la casilla de partida y las siguientes {@code clearance} en esa direccion sean aire. */
@@ -131,5 +147,9 @@ public class Arena {
 
     public int getMaxZ() {
         return maxZ;
+    }
+
+    /** Resultado de findRandomSpawn: la celda elegida junto con la direccion que tenia despejada. */
+    public record ArenaSpawn(Location location, Direction direction) {
     }
 }
