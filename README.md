@@ -106,9 +106,14 @@ varios puntos que no estaban definidos:
 - **Regreso al salir/morir**: al terminar la partida (por chocar o con
   `/snake leave`), el jugador vuelve exactamente al sitio donde estaba parado
   antes de entrar a la arena — no se queda flotando dentro de ella.
-- **Marcador lateral en vivo**: mientras juegas, un scoreboard en la barra
-  lateral muestra la puntuacion de todos los jugadores activos en tu misma
-  arena, actualizado al unirse, salir o comer alguien.
+- **Marcador lateral en vivo, distinto segun el modo**: en modo **un jugador**
+  muestra tu record personal (el mejor puntaje que hayas conseguido, guardado
+  en disco — sobrevive a reinicios del servidor), tu puntaje actual, y el
+  tiempo jugado (con un cronometro que avanza en vivo, se refresca cada
+  segundo). En modo **multijugador** muestra el puntaje de cada jugador
+  activo en tu misma arena. El modo es una preferencia de cada jugador, no de
+  la arena: dos personas en la misma arena pueden estar cada una en un modo
+  distinto y ver un marcador distinto.
 
 ## Requisitos para compilar
 

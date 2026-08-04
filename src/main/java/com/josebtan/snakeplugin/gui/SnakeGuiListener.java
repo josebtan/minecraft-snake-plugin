@@ -173,7 +173,7 @@ public class SnakeGuiListener implements Listener {
         }
 
         player.closeInventory();
-        SnakeGame game = gameManager.startGame(player, arena, chosen);
+        SnakeGame game = gameManager.startGame(player, arena, chosen, holder.isMultiplayer());
         if (game == null) {
             player.sendMessage(Component.text(
                     "No se encontro un sitio libre para aparecer en '" + arena.getName()

@@ -98,6 +98,12 @@ public class SnakeGame {
     /** Cuantas veces comio esta partida. */
     private int score = 0;
 
+    /** true si se eligio "Multijugador" en el menu (afecta que scoreboard se le muestra). */
+    private boolean multiplayer;
+
+    /** System.currentTimeMillis() de cuando arranco la partida, para calcular el tiempo jugado. */
+    private long startTimeMillis;
+
     public SnakeGame(UUID playerId, SnakeColor color) {
         this.playerId = playerId;
         this.color = color;
@@ -108,13 +114,19 @@ public class SnakeGame {
      * espacio libre por delante, ver Arena#findRandomSpawn) para la cabeza (bloque de lana
      * real), crea el asiento invisible justo encima, y monta al jugador en el.
      *
+     * @param multiplayer el modo elegido en el menu (ver com.josebtan.snakeplugin.gui.ModeMenu):
+     *                     decide que tipo de scoreboard se le muestra a ESTE jugador (ver
+     *                     GameManager#refreshScoreboards) — no afecta a la logica del juego
+     *                     en si, cualquier arena puede tener jugadores en ambos modos a la vez.
      * @return false si no se encontro ningun punto de spawn libre en la arena (no se inicia
      *         nada en ese caso); true si la partida arranco con normalidad.
      */
-    public boolean start(Player player, Arena arena) {
+    public boolean start(Player player, Arena arena, boolean multiplayer) {
         this.arena = arena;
         this.currentDirection = Direction.SOUTH;
         this.returnLocation = player.getLocation().clone();
+        this.multiplayer = multiplayer;
+        this.startTimeMillis = System.currentTimeMillis();
 
         Location spawn = arena.findRandomSpawn(currentDirection, SPAWN_CLEARANCE, SPAWN_MAX_ATTEMPTS);
         if (spawn == null) {
@@ -319,5 +331,14 @@ public class SnakeGame {
     /** Largo actual de la serpiente (cabeza incluida). */
     public int getLength() {
         return body.size();
+    }
+
+    public boolean isMultiplayer() {
+        return multiplayer;
+    }
+
+    /** Segundos transcurridos desde que arranco esta partida. */
+    public long getElapsedSeconds() {
+        return (System.currentTimeMillis() - startTimeMillis) / 1000L;
     }
 }

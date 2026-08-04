@@ -2,6 +2,7 @@ package com.josebtan.snakeplugin.game;
 
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.food.FoodManager;
+import com.josebtan.snakeplugin.player.PlayerRecordManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -24,49 +25,48 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Administra todas las partidas de snake activas en el servidor y el bucle de
- * movimiento que las hace avanzar.
+ * Administra todas las partidas de snake activas en el servidor y los dos bucles que las
+ * mantienen: uno de MOVIMIENTO (cada 8 ticks) y otro de MARCADOR (cada 20 ticks / 1s, para
+ * que el cronometro del modo un jugador se vea contar en vivo).
  *
- * A diferencia de versiones anteriores, ya NO hay un bucle aparte "de camara"
- * que reteleporte al jugador cada tick de servidor: al ir sentado en un
- * ArmorStand invisible pegado al bloque de la cabeza (ver SnakeGame), su
- * posicion la resuelve el propio motor de Minecraft de forma gratuita al
- * mover el asiento, y la camara del jugador queda completamente libre (sin
- * bloqueo). Esto reduce bastante la carga sobre el servidor comparado con el
- * primer enfoque (tele-transportar al jugador 20 veces por segundo).
+ * A diferencia de versiones anteriores, ya NO hay un bucle "de camara" que reteleporte al
+ * jugador cada tick de servidor: al ir sentado en un ArmorStand invisible pegado al bloque
+ * de la cabeza (ver SnakeGame), su posicion la resuelve el propio motor de Minecraft de
+ * forma gratuita al mover el asiento, y la camara del jugador queda completamente libre.
  *
- * ETAPA 2: startGame ahora exige una Arena (campo delimitado), y el bucle de
- * movimiento termina automaticamente la partida de cualquier jugador cuya
- * serpiente choque (ver SnakeGame#tick).
+ * ETAPA 2: startGame ahora exige una Arena (campo delimitado), y el bucle de movimiento
+ * termina automaticamente la partida de cualquier jugador cuya serpiente choque.
  *
- * ETAPA 3/4: cada Arena tiene su propia comida (ver FoodManager, compartida por todos
- * los jugadores que jueguen ahi), y startGame se asegura de que haya una activa al
- * arrancar una partida. El bucle de movimiento ahora reacciona a los tres resultados
- * posibles de un tick (vivo / comio / choco) en vez de un simple booleano.
+ * ETAPA 3/4: cada Arena tiene su propia comida (ver FoodManager, compartida por todos los
+ * jugadores que jueguen ahi), y startGame se asegura de que haya una activa al arrancar.
  *
- * ANALISIS DE FLUJO (revision con el usuario): se agregaron tres cosas que antes no
- * estaban definidas:
- *   1. Choque de frente: si dos (o mas) serpientes de la MISMA arena planean moverse a
- *      la misma casilla vacia en el mismo tick (o se cruzan intercambiando posiciones),
- *      se resuelve ANTES de mover a nadie: gana la mas larga; en caso de empate exacto
- *      de tamaño, pierden todas. Sin esto, ganaba quien se procesara primero por pura
- *      casualidad del orden interno del mapa — arbitrario e injusto.
- *   2. Aviso a toda la arena cuando alguien choca (no solo al que choco).
- *   3. Marcador lateral (scoreboard) en vivo con la puntuacion de todos los jugadores
- *      de la misma arena, que se actualiza al unirse/salir/comer.
+ * ANALISIS DE FLUJO: se agregaron choque de frente (gana la mas larga), aviso a toda la
+ * arena al chocar, y un marcador lateral en vivo — que ahora es DISTINTO segun el modo
+ * elegido en el menu (ver SnakeGame#isMultiplayer):
+ *   - Un jugador: record personal (ver PlayerRecordManager, persistente en disco),
+ *     puntaje actual, y tiempo jugado (con cronometro en vivo).
+ *   - Multijugador: puntaje de cada jugador activo en la misma arena.
+ * El modo es una preferencia POR JUGADOR, no de la arena: dos jugadores en la misma arena
+ * pueden estar cada uno en un modo distinto y ver un marcador distinto.
  */
 public class GameManager {
 
     /** Cada cuantos ticks de servidor avanza la serpiente una casilla (20 ticks = 1s). */
     private static final long MOVE_INTERVAL_TICKS = 8L; // ~0.4s por movimiento
 
+    /** Cada cuantos ticks se refresca el marcador lateral (20 ticks = 1s, para el cronometro). */
+    private static final long SCOREBOARD_INTERVAL_TICKS = 20L;
+
     private final Plugin plugin;
     private final Map<UUID, SnakeGame> games = new ConcurrentHashMap<>();
     private final FoodManager foodManager = new FoodManager();
+    private final PlayerRecordManager recordManager;
     private BukkitTask movementTask;
+    private BukkitTask scoreboardTask;
 
     public GameManager(Plugin plugin) {
         this.plugin = plugin;
+        this.recordManager = new PlayerRecordManager(plugin);
     }
 
     public FoodManager getFoodManager() {
@@ -75,25 +75,25 @@ public class GameManager {
 
     /**
      * Crea e inicia una partida nueva para el jugador dentro de la arena dada, con el color
-     * elegido en el menu (ver com.josebtan.snakeplugin.gui), si no tiene ya una activa.
-     * Devuelve null si la arena no tiene ningun punto libre donde aparecer (ver
-     * Arena#findRandomSpawn / SnakeGame#start) — en ese caso no se crea nada.
+     * elegido en el menu y el modo (un jugador / multijugador, decide que scoreboard vera),
+     * si no tiene ya una activa. Devuelve null si la arena no tiene ningun punto libre donde
+     * aparecer (ver Arena#findRandomSpawn / SnakeGame#start) — en ese caso no se crea nada.
      */
-    public SnakeGame startGame(Player player, Arena arena, SnakeColor color) {
+    public SnakeGame startGame(Player player, Arena arena, SnakeColor color, boolean multiplayer) {
         UUID id = player.getUniqueId();
         if (games.containsKey(id)) {
             return games.get(id);
         }
 
         SnakeGame game = new SnakeGame(id, color);
-        if (!game.start(player, arena)) {
+        if (!game.start(player, arena, multiplayer)) {
             return null;
         }
         games.put(id, game);
         foodManager.ensureFoodSpawned(arena);
-        updateScoreboards(arena);
+        refreshScoreboards(); // feedback inmediato, no esperar al proximo tick del marcador
 
-        ensureLoopRunning();
+        ensureLoopsRunning();
         return game;
     }
 
@@ -120,10 +120,10 @@ public class GameManager {
             game.stop(player);
             resetScoreboard(player);
             clearFoodIfArenaEmpty(arena);
-            updateScoreboards(arena);
+            refreshScoreboards();
         }
         if (games.isEmpty()) {
-            stopLoop();
+            stopLoops();
         }
     }
 
@@ -143,17 +143,25 @@ public class GameManager {
         }
     }
 
-    private void ensureLoopRunning() {
+    private void ensureLoopsRunning() {
         if (movementTask == null) {
             movementTask = Bukkit.getScheduler()
                     .runTaskTimer(plugin, this::tickMovement, MOVE_INTERVAL_TICKS, MOVE_INTERVAL_TICKS);
         }
+        if (scoreboardTask == null) {
+            scoreboardTask = Bukkit.getScheduler()
+                    .runTaskTimer(plugin, this::refreshScoreboards, SCOREBOARD_INTERVAL_TICKS, SCOREBOARD_INTERVAL_TICKS);
+        }
     }
 
-    private void stopLoop() {
+    private void stopLoops() {
         if (movementTask != null) {
             movementTask.cancel();
             movementTask = null;
+        }
+        if (scoreboardTask != null) {
+            scoreboardTask.cancel();
+            scoreboardTask = null;
         }
     }
 
@@ -179,8 +187,9 @@ public class GameManager {
      * serpientes de la misma arena (ver resolveHeadOnCollisions), y despues mueve cada
      * cabeza (y su asiento, con el jugador encima) una casilla. Reacciona al TickResult:
      *   - COLLIDED: esa serpiente acaba de chocar, se termina su partida aqui mismo, se
-     *     avisa al jugador y al resto de la arena, y se actualiza el marcador.
-     *   - ATE: comio y crecio, se avisa del punto (action bar) y se actualiza el marcador.
+     *     avisa al jugador y al resto de la arena, y se refresca el marcador.
+     *   - ATE: comio y crecio, se avisa del punto (action bar) — y si supero su record
+     *     personal, tambien se avisa de eso y se guarda en disco.
      *   - ALIVE: nada especial que hacer.
      */
     private void tickMovement() {
@@ -208,15 +217,18 @@ public class GameManager {
                     broadcastToArena(arena, player, Component.text(
                             playerName + " ha chocado (puntos: " + game.getScore() + ").",
                             NamedTextColor.GRAY));
-                    updateScoreboards(arena);
+                    refreshScoreboards();
                 }
                 case ATE -> {
+                    boolean newRecord = recordManager.updateIfHigher(game.getPlayerId(), game.getScore());
                     if (player != null) {
-                        player.sendActionBar(Component.text(
-                                "¡Comiste! Puntos: " + game.getScore() + " | Largo: " + game.getLength(),
-                                NamedTextColor.GOLD));
+                        String text = "¡Comiste! Puntos: " + game.getScore() + " | Largo: " + game.getLength();
+                        if (newRecord) {
+                            text += " | ¡Nuevo record!";
+                        }
+                        player.sendActionBar(Component.text(text, NamedTextColor.GOLD));
                     }
-                    updateScoreboards(arena);
+                    refreshScoreboards();
                 }
                 case ALIVE -> {
                     // Nada que hacer.
@@ -224,7 +236,7 @@ public class GameManager {
             }
         }
         if (games.isEmpty()) {
-            stopLoop();
+            stopLoops();
         }
     }
 
@@ -239,13 +251,7 @@ public class GameManager {
      * @return los UUID de los jugadores cuya serpiente pierde el choque este tick.
      */
     private Set<UUID> resolveHeadOnCollisions() {
-        Map<Arena, List<SnakeGame>> byArena = new HashMap<>();
-        for (SnakeGame game : games.values()) {
-            Arena arena = game.getArena();
-            if (arena != null) {
-                byArena.computeIfAbsent(arena, a -> new ArrayList<>()).add(game);
-            }
-        }
+        Map<Arena, List<SnakeGame>> byArena = groupActiveGamesByArena();
 
         Set<UUID> losers = new HashSet<>();
         for (List<SnakeGame> arenaGames : byArena.values()) {
@@ -284,6 +290,18 @@ public class GameManager {
             }
         }
         return losers;
+    }
+
+    /** Agrupa las partidas activas por arena — lo usan tanto la deteccion de choques como el marcador. */
+    private Map<Arena, List<SnakeGame>> groupActiveGamesByArena() {
+        Map<Arena, List<SnakeGame>> byArena = new HashMap<>();
+        for (SnakeGame game : games.values()) {
+            Arena arena = game.getArena();
+            if (arena != null) {
+                byArena.computeIfAbsent(arena, a -> new ArrayList<>()).add(game);
+            }
+        }
+        return byArena;
     }
 
     /** Entre los que compiten por la misma casilla, marca como perdedoras a todas menos la mas larga. */
@@ -326,50 +344,80 @@ public class GameManager {
     }
 
     /**
-     * Reconstruye y reenvia el marcador lateral (scoreboard) a todos los jugadores con
-     * partida activa en esa arena, mostrando la puntuacion de cada uno. Se llama al
-     * unirse/salir/comer alguien en esa arena. Usa titulos de texto clasico (no Adventure
-     * Component) a proposito, por ser la forma mas estable/segura de crear objectives.
+     * Reconstruye y reenvia el marcador lateral a TODOS los jugadores con partida activa,
+     * cada uno con el tipo que le corresponde segun su propio modo (ver SnakeGame#isMultiplayer):
+     * solo (record/puntos/tiempo, personal) o multijugador (puntaje de toda la arena). Se
+     * llama al unirse/salir/comer, y ademas cada segundo (ver SCOREBOARD_INTERVAL_TICKS) para
+     * que el cronometro del modo solo se vea avanzar en vivo.
      */
-    private void updateScoreboards(Arena arena) {
-        if (arena == null) {
+    private void refreshScoreboards() {
+        if (games.isEmpty()) {
             return;
         }
-        List<SnakeGame> arenaGames = new ArrayList<>();
-        for (SnakeGame game : games.values()) {
-            if (game.getArena() != null && game.getArena().getName().equalsIgnoreCase(arena.getName())) {
-                arenaGames.add(game);
-            }
-        }
-        if (arenaGames.isEmpty()) {
-            return;
-        }
-
         ScoreboardManager manager = Bukkit.getScoreboardManager();
         if (manager == null) {
             return;
         }
 
-        for (SnakeGame viewerGame : arenaGames) {
-            Player viewer = Bukkit.getPlayer(viewerGame.getPlayerId());
+        Map<Arena, List<SnakeGame>> byArena = groupActiveGamesByArena();
+
+        for (SnakeGame game : games.values()) {
+            Player viewer = Bukkit.getPlayer(game.getPlayerId());
             if (viewer == null) {
                 continue;
             }
-
-            Scoreboard board = manager.getNewScoreboard();
-            @SuppressWarnings("deprecation")
-            Objective objective = board.registerNewObjective("snake", "dummy");
-            objective.setDisplayName("Snake: " + arena.getName());
-            objective.setDisplaySlot(DisplaySlot.SIDEBAR);
-
-            for (SnakeGame game : arenaGames) {
-                Player entryPlayer = Bukkit.getPlayer(game.getPlayerId());
-                String entryName = entryPlayer != null ? entryPlayer.getName() : "???";
-                objective.getScore(entryName).setScore(game.getScore());
+            if (game.isMultiplayer()) {
+                List<SnakeGame> arenaGames = game.getArena() != null
+                        ? byArena.getOrDefault(game.getArena(), List.of())
+                        : List.of();
+                showMultiplayerScoreboard(manager, viewer, game, arenaGames);
+            } else {
+                showSoloScoreboard(manager, viewer, game);
             }
-
-            viewer.setScoreboard(board);
         }
+    }
+
+    /** Marcador del modo "un jugador": record personal, puntaje actual, y tiempo jugado. */
+    @SuppressWarnings("deprecation")
+    private void showSoloScoreboard(ScoreboardManager manager, Player viewer, SnakeGame game) {
+        int record = Math.max(recordManager.getRecord(game.getPlayerId()), game.getScore());
+
+        Scoreboard board = manager.getNewScoreboard();
+        Objective objective = board.registerNewObjective("snake", "dummy");
+        objective.setDisplayName("Snake");
+        objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+
+        // El numero de cada linea solo controla el ORDEN (de arriba a abajo, descendente);
+        // el valor real que importa va dentro del propio texto de la entrada.
+        objective.getScore("Record: " + record).setScore(3);
+        objective.getScore("Puntos: " + game.getScore()).setScore(2);
+        objective.getScore("Tiempo: " + formatTime(game.getElapsedSeconds())).setScore(1);
+
+        viewer.setScoreboard(board);
+    }
+
+    /** Marcador del modo "multijugador": puntaje de cada jugador activo en la misma arena. */
+    @SuppressWarnings("deprecation")
+    private void showMultiplayerScoreboard(ScoreboardManager manager, Player viewer, SnakeGame game,
+                                            List<SnakeGame> arenaGames) {
+        Scoreboard board = manager.getNewScoreboard();
+        Objective objective = board.registerNewObjective("snake", "dummy");
+        objective.setDisplayName("Snake: " + (game.getArena() != null ? game.getArena().getName() : ""));
+        objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+
+        for (SnakeGame arenaGame : arenaGames) {
+            Player entryPlayer = Bukkit.getPlayer(arenaGame.getPlayerId());
+            String entryName = entryPlayer != null ? entryPlayer.getName() : "???";
+            objective.getScore(entryName).setScore(arenaGame.getScore());
+        }
+
+        viewer.setScoreboard(board);
+    }
+
+    private static String formatTime(long totalSeconds) {
+        long minutes = totalSeconds / 60;
+        long seconds = totalSeconds % 60;
+        return String.format("%02d:%02d", minutes, seconds);
     }
 
     /** Le devuelve al jugador el marcador normal del servidor (al salir/morir, para no dejarle el sidebar pegado). */
@@ -409,6 +457,6 @@ public class GameManager {
         for (Arena arena : arenas) {
             foodManager.clear(arena);
         }
-        stopLoop();
+        stopLoops();
     }
 }
