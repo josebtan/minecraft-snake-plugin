@@ -1,5 +1,6 @@
 package com.josebtan.snakeplugin.arena;
 
+import com.josebtan.snakeplugin.game.GameMode;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -74,7 +75,20 @@ public class ArenaManager {
             int maxZ = arenaSection.getInt("maxZ");
             int boardY = arenaSection.getInt("boardY");
 
-            arenas.put(key, new Arena(key, world, minX, maxX, minZ, maxZ, boardY));
+            // Compatibilidad con arenas guardadas por versiones anteriores (sin modo):
+            // se asume "un jugador".
+            String modeName = arenaSection.getString("mode");
+            GameMode mode = GameMode.SOLO;
+            if (modeName != null) {
+                try {
+                    mode = GameMode.valueOf(modeName.toUpperCase());
+                } catch (IllegalArgumentException ignored) {
+                    mode = GameMode.SOLO;
+                }
+            }
+            int maxPlayers = Math.max(1, arenaSection.getInt("maxPlayers", mode.isMultiplayer() ? 2 : 1));
+
+            arenas.put(key, new Arena(key, world, minX, maxX, minZ, maxZ, boardY, mode, maxPlayers));
             loaded++;
         }
 
@@ -95,6 +109,8 @@ public class ArenaManager {
             config.set(path + ".minZ", arena.getMinZ());
             config.set(path + ".maxZ", arena.getMaxZ());
             config.set(path + ".boardY", arena.getBoardY());
+            config.set(path + ".mode", arena.getMode().name());
+            config.set(path + ".maxPlayers", arena.getMaxPlayers());
         }
 
         try {
@@ -125,10 +141,11 @@ public class ArenaManager {
 
     /**
      * Crea (o reemplaza) la arena con el nombre dado usando las esquinas pos1/pos2 que el
-     * jugador tenga marcadas en ese momento, y la guarda en disco. Devuelve null sin hacer
-     * nada si falta alguna esquina o si estan en mundos distintos.
+     * jugador tenga marcadas en ese momento, el modo de juego elegido y, en modo
+     * multijugador, el numero maximo de jugadores por partida. Se guarda en disco. Devuelve
+     * null sin hacer nada si falta alguna esquina o si estan en mundos distintos.
      */
-    public Arena createFromPending(Player player, String name) {
+    public Arena createFromPending(Player player, String name, GameMode mode, int maxPlayers) {
         Location pos1 = getPos1(player);
         Location pos2 = getPos2(player);
         if (pos1 == null || pos2 == null) {
@@ -146,7 +163,7 @@ public class ArenaManager {
         // marcaron mas o menos al mismo nivel; no se valida mas alla de esto por ahora).
         int boardY = pos1.getBlockY();
 
-        Arena arena = new Arena(name, pos1.getWorld(), minX, maxX, minZ, maxZ, boardY);
+        Arena arena = new Arena(name, pos1.getWorld(), minX, maxX, minZ, maxZ, boardY, mode, maxPlayers);
         arenas.put(name.toLowerCase(), arena);
         save();
         return arena;

@@ -19,10 +19,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
 
-import java.util.Collections;
 import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Reacciona a los clics dentro de todos los menus de SnakeGuiMenus. Los inventarios
@@ -43,14 +40,14 @@ public class SnakeGuiListener implements Listener {
     private final Plugin plugin;
     private final GameManager gameManager;
     private final ArenaManager arenaManager;
+    private final ArenaCreationFlow creationFlow;
 
-    /** Jugadores de los que se espera que el proximo mensaje de chat sea el nombre de una arena. */
-    private final Set<UUID> awaitingArenaName = Collections.newSetFromMap(new ConcurrentHashMap<>());
-
-    public SnakeGuiListener(Plugin plugin, GameManager gameManager, ArenaManager arenaManager) {
+    public SnakeGuiListener(Plugin plugin, GameManager gameManager, ArenaManager arenaManager,
+                            ArenaCreationFlow creationFlow) {
         this.plugin = plugin;
         this.gameManager = gameManager;
         this.arenaManager = arenaManager;
+        this.creationFlow = creationFlow;
     }
 
     @EventHandler
@@ -81,9 +78,7 @@ public class SnakeGuiListener implements Listener {
             return;
         }
 
-        if (holder instanceof ModeMenuHolder modeHolder) {
-            handleModeClick(player, modeHolder, event.getSlot());
-        } else if (holder instanceof ColorMenuHolder colorHolder) {
+        if (holder instanceof ColorMenuHolder colorHolder) {
             handleColorClick(player, colorHolder, event.getSlot());
         } else if (holder instanceof ArenaListMenuHolder listHolder) {
             handleArenaListClick(player, listHolder, event.getSlot());
@@ -93,8 +88,9 @@ public class SnakeGuiListener implements Listener {
     }
 
     /**
-     * Captura el nombre escrito por un jugador que acaba de pulsar "Crear arena". Se
-     * cancela el evento para que ese mensaje no se difunda como chat normal.
+     * Captura el chat de un jugador que esta en medio del flujo de creacion de una arena
+     * (nombre -> modo -> maximo de jugadores, ver ArenaCreationFlow). Se cancela el evento
+     * para que ese mensaje no se difunda como chat normal.
      *
      * NOTA: AsyncPlayerChatEvent se dispara FUERA del hilo principal del servidor —
      * por eso el trabajo real (crear la arena, tocar el mundo/el archivo) se
@@ -104,45 +100,19 @@ public class SnakeGuiListener implements Listener {
     @EventHandler
     public void onAsyncPlayerChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
-        if (!awaitingArenaName.remove(player.getUniqueId())) {
+        if (!creationFlow.isAwaiting(player)) {
             return;
         }
         event.setCancelled(true);
         String typed = event.getMessage().trim();
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (typed.isEmpty() || typed.equalsIgnoreCase("cancelar")) {
-                player.sendMessage(Component.text("Creacion de arena cancelada.", NamedTextColor.YELLOW));
-                return;
-            }
-            Arena arena = arenaManager.createFromPending(player, typed);
-            if (arena == null) {
-                player.sendMessage(Component.text(
-                        "Falta marcar pos1 y pos2 (en el mismo mundo) antes de crear la arena.",
-                        NamedTextColor.RED));
-                return;
-            }
-            player.sendMessage(Component.text("Arena '" + typed + "' creada y guardada.", NamedTextColor.GREEN));
-        });
+        Bukkit.getScheduler().runTask(plugin, () -> creationFlow.onChat(player, typed));
     }
 
     /** Si el jugador se desconecta con una peticion de nombre pendiente, se olvida sin mas. */
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        awaitingArenaName.remove(event.getPlayer().getUniqueId());
-    }
-
-    private void handleModeClick(Player player, ModeMenuHolder holder, int slot) {
-        boolean multiplayer;
-        if (slot == 3) {
-            multiplayer = false;
-        } else if (slot == 5) {
-            multiplayer = true;
-        } else {
-            return;
-        }
-        player.closeInventory();
-        SnakeGuiMenus.openColorMenu(player, holder.getArena(), multiplayer, gameManager);
+        creationFlow.clearPending(event.getPlayer());
     }
 
     private void handleColorClick(Player player, ColorMenuHolder holder, int slot) {
@@ -153,27 +123,39 @@ public class SnakeGuiListener implements Listener {
         SnakeColor chosen = colors[slot];
         Arena arena = holder.getArena();
 
-        if (gameManager.hasGame(player)) {
+        if (gameManager.hasGame(player) || gameManager.isInLobby(player)) {
             player.closeInventory();
-            player.sendMessage(Component.text("Ya tienes una serpiente activa. Usa /snake leave primero.",
+            player.sendMessage(Component.text("Ya estas en una partida o esperando en una arena. Usa /snake leave primero.",
                     NamedTextColor.RED));
             return;
         }
 
-        if (holder.isMultiplayer()) {
+        player.closeInventory();
+
+        if (arena.getMode().isMultiplayer()) {
             Set<SnakeColor> taken = gameManager.getColorsInUse(arena);
             if (taken.contains(chosen)) {
                 player.sendMessage(Component.text(
                         "Ese color ya lo esta usando otro jugador en esta arena. Elige otro.",
                         NamedTextColor.RED));
                 // Se refresca el menu para que el jugador vea el estado actual actualizado.
-                SnakeGuiMenus.openColorMenu(player, arena, true, gameManager);
+                SnakeGuiMenus.openColorMenu(player, arena, gameManager);
                 return;
             }
+            if (!gameManager.joinMultiplayerLobby(player, arena, chosen)) {
+                player.sendMessage(Component.text(
+                        "Esta arena ya esta llena o en curso. Prueba un poco mas tarde.",
+                        NamedTextColor.RED));
+                return;
+            }
+            player.sendMessage(Component.text(
+                    "Te uniste a la espera de '" + arena.getName() + "' con la serpiente "
+                            + chosen.getDisplayName().toLowerCase() + ". Esperando al resto de jugadores...",
+                    NamedTextColor.GREEN));
+            return;
         }
 
-        player.closeInventory();
-        SnakeGame game = gameManager.startGame(player, arena, chosen, holder.isMultiplayer());
+        SnakeGame game = gameManager.startGame(player, arena, chosen);
         if (game == null) {
             player.sendMessage(Component.text(
                     "No se encontro un sitio libre para aparecer en '" + arena.getName()
@@ -204,7 +186,7 @@ public class SnakeGuiListener implements Listener {
         }
 
         player.closeInventory();
-        SnakeGuiMenus.openModeMenu(player, arena);
+        SnakeGuiMenus.openColorMenu(player, arena, gameManager);
     }
 
     private void handleArenaCreateClick(Player player, int slot) {
@@ -230,9 +212,7 @@ public class SnakeGuiListener implements Listener {
                     return;
                 }
                 player.closeInventory();
-                awaitingArenaName.add(player.getUniqueId());
-                player.sendMessage(Component.text(
-                        "Escribe el nombre de la arena en el chat (o 'cancelar').", NamedTextColor.AQUA));
+                creationFlow.start(player);
             }
             case 8 -> { // Eliminar arena
                 player.closeInventory();
@@ -249,8 +229,7 @@ public class SnakeGuiListener implements Listener {
     }
 
     private boolean isOurHolder(InventoryHolder holder) {
-        return holder instanceof ModeMenuHolder
-                || holder instanceof ColorMenuHolder
+        return holder instanceof ColorMenuHolder
                 || holder instanceof ArenaListMenuHolder
                 || holder instanceof ArenaCreateMenuHolder;
     }

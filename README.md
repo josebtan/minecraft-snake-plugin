@@ -32,6 +32,24 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
 - Chocar contra la cola propia, la de otro jugador, o contra el borde del campo de
   juego, termina la partida de ese jugador.
 
+## Crear una arena: modo de juego y maximo de jugadores
+
+Al crear una arena, el modo de juego se elige DURANTE la creacion y queda fijado para
+siempre: **una arena es "un jugador" O "multijugador", nunca ambos a la vez** (a
+diferencia de versiones anteriores, donde el modo era una preferencia por jugador).
+
+- Al pulsar "Crear arena" (o `/snake arena create [nombre]`) se pide por chat, en
+  orden: el **nombre** (si no se paso), el **modo** (`solo` o `multi`), y si es `multi`
+  el **maximo de jugadores** por partida (2-8, obligatorio). El modo y el maximo se
+  guardan en `arenas.yml` junto con las esquinas.
+- **Sala de espera**: al unirse a una arena multijugador ya configurada, se entra a una
+  sala de espera (con el color elegido reservado). La partida arranca cuando se llena la
+  sala (se alcanza el maximo de jugadores) o cuando caduca un temporizador de espera
+  (~15s, que se reinicia con cada nuevo jugador que entra). Mientras tanto, el jugador ve
+  por la action bar cuantos van y cuanto falta. `/snake leave` o desconectarse te saca de
+  la sala.
+- En una arena "un jugador", elegir color arranca la partida de inmediato, como antes.
+
 ## Etapas de desarrollo
 
 El desarrollo esta dividido en 4 etapas, tal y como se planifico:

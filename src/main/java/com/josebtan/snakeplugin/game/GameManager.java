@@ -42,12 +42,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * ANALISIS DE FLUJO: se agregaron choque de frente (gana la mas larga), aviso a toda la
  * arena al chocar, y un marcador lateral en vivo — que ahora es DISTINTO segun el modo
- * elegido en el menu (ver SnakeGame#isMultiplayer):
- *   - Un jugador: record personal (ver PlayerRecordManager, persistente en disco),
+ * de la ARENA (el modo ya no es una preferencia del jugador: se elige al crear la arena,
+ * ver com.josebtan.snakeplugin.game.GameMode):
+ *   - Arenas "un jugador": record personal (ver PlayerRecordManager, persistente en disco),
  *     puntaje actual, y tiempo jugado (con cronometro en vivo).
- *   - Multijugador: puntaje de cada jugador activo en la misma arena.
- * El modo es una preferencia POR JUGADOR, no de la arena: dos jugadores en la misma arena
- * pueden estar cada uno en un modo distinto y ver un marcador distinto.
+ *   - Arenas multijugador: puntaje de cada jugador activo en la misma arena. Al unirse,
+ *     los jugadores pasan por una sala de espera (ver joinMultiplayerLobby) hasta llenarse
+ *     o caducar el temporizador; solo entonces arrancan todos juntos.
  */
 public class GameManager {
 
@@ -57,8 +58,17 @@ public class GameManager {
     /** Cada cuantos ticks se refresca el marcador lateral (20 ticks = 1s, para el cronometro). */
     private static final long SCOREBOARD_INTERVAL_TICKS = 20L;
 
+    /**
+     * Segundos que espera la sala de espera de una arena multijugador antes de arrancar
+     * la partida con los que hayan entrado. Cada vez que se une alguien nuevo, el
+     * contador vuelve a empezar. La partida arranca antes (sin esperar) si la sala se
+     * llena con el maximo de jugadores de la arena.
+     */
+    private static final long LOBBY_WAIT_SECONDS = 15L;
+
     private final Plugin plugin;
     private final Map<UUID, SnakeGame> games = new ConcurrentHashMap<>();
+    private final Map<String, Lobby> lobbies = new ConcurrentHashMap<>();
     private final FoodManager foodManager = new FoodManager();
     private final PlayerRecordManager recordManager;
     private BukkitTask movementTask;
@@ -75,18 +85,19 @@ public class GameManager {
 
     /**
      * Crea e inicia una partida nueva para el jugador dentro de la arena dada, con el color
-     * elegido en el menu y el modo (un jugador / multijugador, decide que scoreboard vera),
-     * si no tiene ya una activa. Devuelve null si la arena no tiene ningun punto libre donde
+     * elegido en el menu, si no tiene ya una activa. El modo (un jugador / multijugador) NO
+     * se elige aqui: lo decide la propia arena (ver Arena#getMode) — el modo decide que
+     * scoreboard vera el jugador. Devuelve null si la arena no tiene ningun punto libre donde
      * aparecer (ver Arena#findRandomSpawn / SnakeGame#start) — en ese caso no se crea nada.
      */
-    public SnakeGame startGame(Player player, Arena arena, SnakeColor color, boolean multiplayer) {
+    public SnakeGame startGame(Player player, Arena arena, SnakeColor color) {
         UUID id = player.getUniqueId();
         if (games.containsKey(id)) {
             return games.get(id);
         }
 
         SnakeGame game = new SnakeGame(id, color);
-        if (!game.start(player, arena, multiplayer)) {
+        if (!game.start(player, arena, arena.getMode().isMultiplayer())) {
             return null;
         }
         games.put(id, game);
@@ -98,8 +109,9 @@ public class GameManager {
     }
 
     /**
-     * Colores ya en uso por partidas activas EN ESA MISMA ARENA (para el menu de seleccion
-     * de color en modo multijugador: ver com.josebtan.snakeplugin.gui.ColorMenu).
+     * Colores ya en uso/reservados EN ESA MISMA ARENA: los de las partidas activas mas los
+     * de la sala de espera en curso (para el menu de seleccion de color y para validar el
+     * clic en una arena multijugador).
      */
     public Set<SnakeColor> getColorsInUse(Arena arena) {
         Set<SnakeColor> inUse = new HashSet<>();
@@ -109,7 +121,82 @@ public class GameManager {
                 inUse.add(game.getColor());
             }
         }
+        Lobby lobby = lobbies.get(arena.getName().toLowerCase());
+        if (lobby != null) {
+            for (LobbyMember member : lobby.members) {
+                inUse.add(member.color());
+            }
+        }
         return inUse;
+    }
+
+    /**
+     * Anade al jugador a la sala de espera de la arena multijugador (o crea la sala si no
+     * existe). Reserva su color para que nadie mas pueda elegirlo. Devuelve false si la
+     * arena ya esta llena (sala completa o partida con el maximo de jugadores) o si ese
+     * color ya esta reservado.
+     */
+    public boolean joinMultiplayerLobby(Player player, Arena arena, SnakeColor color) {
+        String key = arena.getName().toLowerCase();
+        Lobby lobby = lobbies.get(key);
+
+        if (lobby == null) {
+            if (getColorsInUse(arena).contains(color)) {
+                return false;
+            }
+            lobby = new Lobby(arena);
+            lobbies.put(key, lobby);
+        }
+
+        if (lobby.members.size() >= arena.getMaxPlayers()) {
+            return false;
+        }
+        for (LobbyMember member : lobby.members) {
+            if (member.playerId().equals(player.getUniqueId())) {
+                return true; // ya esta esperando, no se duplica
+            }
+        }
+        if (getColorsInUse(arena).contains(color)) {
+            return false;
+        }
+
+        lobby.members.add(new LobbyMember(player.getUniqueId(), color));
+        lobby.countdownSeconds = LOBBY_WAIT_SECONDS;
+        if (lobby.task == null) {
+            Lobby tracked = lobby; // copia final para usarla dentro de la lambda
+            lobby.task = Bukkit.getScheduler()
+                    .runTaskTimer(plugin, () -> tickLobby(tracked), 20L, 20L);
+        }
+        broadcastLobby(lobby, player.getName() + " se unio a la sala de espera (" + lobby.members.size()
+                + "/" + arena.getMaxPlayers() + ").");
+        lobby.startTimer();
+
+        if (lobby.members.size() >= arena.getMaxPlayers()) {
+            startLobbyMatch(lobby);
+        }
+        return true;
+    }
+
+    /** true si el jugador esta esperando en alguna sala de espera. */
+    public boolean isInLobby(Player player) {
+        return findLobbyFor(player) != null;
+    }
+
+    /** Saca al jugador de la sala de espera en la que este (si estaba en una). */
+    public void leaveLobby(Player player) {
+        Lobby lobby = findLobbyFor(player);
+        if (lobby == null) {
+            return;
+        }
+        lobby.members.removeIf(m -> m.playerId().equals(player.getUniqueId()));
+        lobby.startTimer();
+        if (lobby.members.isEmpty()) {
+            cancelLobby(lobby);
+            lobbies.remove(lobby.arena.getName().toLowerCase());
+        } else {
+            broadcastLobby(lobby, player.getName() + " abandono la sala de espera ("
+                    + lobby.members.size() + "/" + lobby.arena.getMaxPlayers() + ").");
+        }
     }
 
     /** Detiene y elimina la partida del jugador, si existe (salida voluntaria). */
@@ -454,9 +541,125 @@ public class GameManager {
             }
         }
         games.clear();
+
+        // Tambien se vacian las salas de espera pendientes.
+        for (Lobby lobby : lobbies.values()) {
+            cancelLobby(lobby);
+        }
+        lobbies.clear();
+
         for (Arena arena : arenas) {
             foodManager.clear(arena);
         }
         stopLoops();
+    }
+
+    // ---------------------------------------------------------------------
+    // Sala de espera (lobby) de las arenas multijugador
+    // ---------------------------------------------------------------------
+
+    /** Un jugador esperando en una sala: su UUID y el color de lana reservado. */
+    private record LobbyMember(UUID playerId, SnakeColor color) {
+    }
+
+    /**
+     * Sala de espera de una arena multijugador: los jugadores que ya eligieron color y
+     * estan esperando a que se llene la partida (o a que caduque el temporizador). Cada
+     * sala tiene su propia tarea de cuenta atras (una vez por segundo) que actualiza la
+     * info que ven los jugadores y arranca la partida cuando toca.
+     */
+    private static final class Lobby {
+        private final Arena arena;
+        private final List<LobbyMember> members = new ArrayList<>();
+        private BukkitTask task;
+        private long countdownSeconds;
+
+        private Lobby(Arena arena) {
+            this.arena = arena;
+        }
+
+        private void startTimer() {
+            countdownSeconds = LOBBY_WAIT_SECONDS;
+        }
+    }
+
+    /** Un segundo de sala: actualiza la info que ve cada jugador y comprueba si toca arrancar. */
+    private void tickLobby(Lobby lobby) {
+        if (lobby.members.isEmpty()) {
+            cancelLobby(lobby);
+            lobbies.remove(lobby.arena.getName().toLowerCase());
+            return;
+        }
+        if (lobby.members.size() >= lobby.arena.getMaxPlayers()) {
+            startLobbyMatch(lobby);
+            return;
+        }
+        lobby.countdownSeconds--;
+        for (LobbyMember member : lobby.members) {
+            Player player = Bukkit.getPlayer(member.playerId());
+            if (player != null) {
+                player.sendActionBar(Component.text(
+                        "Arena " + lobby.arena.getName() + ": " + lobby.members.size() + "/"
+                                + lobby.arena.getMaxPlayers() + " jugadores · la partida empieza en "
+                                + Math.max(0, lobby.countdownSeconds) + "s", NamedTextColor.GOLD));
+            }
+        }
+        if (lobby.countdownSeconds <= 0) {
+            startLobbyMatch(lobby);
+        }
+    }
+
+    /** Arranca la partida para todos los que estan esperando en esa sala y vacia la sala. */
+    private void startLobbyMatch(Lobby lobby) {
+        cancelLobby(lobby);
+        lobbies.remove(lobby.arena.getName().toLowerCase());
+
+        for (LobbyMember member : lobby.members) {
+            Player player = Bukkit.getPlayer(member.playerId());
+            if (player == null) {
+                continue; // se desconecto mientras esperaba
+            }
+            SnakeGame game = startGame(player, lobby.arena, member.color());
+            if (game == null) {
+                player.sendMessage(Component.text(
+                        "No se encontro un sitio libre para aparecer en '" + lobby.arena.getName()
+                                + "'. Prueba de nuevo o usa otra arena.", NamedTextColor.RED));
+            } else {
+                player.sendMessage(Component.text(
+                        "¡La partida empieza! Serpiente "
+                                + member.color().getDisplayName().toLowerCase() + " en '"
+                                + lobby.arena.getName() + "'. Usa W/A/S/D para dirigirla.",
+                        NamedTextColor.GREEN));
+            }
+        }
+    }
+
+    /** Envia un mensaje a todos los jugadores que estan esperando en esa sala. */
+    private void broadcastLobby(Lobby lobby, String message) {
+        for (LobbyMember member : lobby.members) {
+            Player player = Bukkit.getPlayer(member.playerId());
+            if (player != null) {
+                player.sendMessage(Component.text(message, NamedTextColor.GRAY));
+            }
+        }
+    }
+
+    /** Devuelve la sala de espera en la que esta el jugador, o null si no esta en ninguna. */
+    private Lobby findLobbyFor(Player player) {
+        for (Lobby lobby : lobbies.values()) {
+            for (LobbyMember member : lobby.members) {
+                if (member.playerId().equals(player.getUniqueId())) {
+                    return lobby;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void cancelLobby(Lobby lobby) {
+        if (lobby.task != null) {
+            lobby.task.cancel();
+            lobby.task = null;
+        }
     }
 }

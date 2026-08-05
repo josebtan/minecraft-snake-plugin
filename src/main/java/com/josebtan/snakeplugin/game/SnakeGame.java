@@ -113,10 +113,11 @@ public class SnakeGame {
      * para la cabeza (bloque de lana real), crea el asiento invisible justo encima, y
      * monta al jugador en el.
      *
-     * @param multiplayer el modo elegido en el menu (ver com.josebtan.snakeplugin.gui.ModeMenu):
-     *                     decide que tipo de scoreboard se le muestra a ESTE jugador (ver
+     * @param multiplayer si la arena es multijugador (se decide al crearla, ver
+     *                     com.josebtan.snakeplugin.game.GameMode): decide que tipo de
+     *                     scoreboard se le muestra a ESTE jugador (ver
      *                     GameManager#refreshScoreboards) — no afecta a la logica del juego
-     *                     en si, cualquier arena puede tener jugadores en ambos modos a la vez.
+     *                     en si.
      * @return false si no se encontro ningun punto de spawn libre en la arena (no se inicia
      *         nada en ese caso); true si la partida arranco con normalidad.
      */

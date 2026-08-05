@@ -5,27 +5,28 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
 /**
- * Identifica el inventario del segundo menu (elegir color de lana). Guarda tambien si se
- * entro en modo multijugador, porque eso decide si hay que bloquear los colores ya
- * elegidos por otros jugadores activos en la misma arena (ver SnakeGuiListener).
+ * Identifica el inventario del menu de color (elegir color de lana). El modo de la arena
+ * ya NO se elige aqui (se fijo al crearla), asi que este holder solo guarda la arena: el
+ * modo se lee en vivo de la propia arena (ver com.josebtan.snakeplugin.game.GameMode) y
+ * decide si hay que bloquear los colores ya reservados por otros jugadores (en partida o
+ * en la sala de espera) de esa misma arena.
  */
 public class ColorMenuHolder implements InventoryHolder {
 
     private final Arena arena;
-    private final boolean multiplayer;
     private Inventory inventory;
 
-    public ColorMenuHolder(Arena arena, boolean multiplayer) {
+    public ColorMenuHolder(Arena arena) {
         this.arena = arena;
-        this.multiplayer = multiplayer;
     }
 
     public Arena getArena() {
         return arena;
     }
 
+    /** true si la arena es multijugador (los colores reservados se bloquean en el menu). */
     public boolean isMultiplayer() {
-        return multiplayer;
+        return arena.getMode().isMultiplayer();
     }
 
     void setInventory(Inventory inventory) {

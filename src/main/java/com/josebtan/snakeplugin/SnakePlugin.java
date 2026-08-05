@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.command.SnakeCommand;
 import com.josebtan.snakeplugin.game.GameManager;
+import com.josebtan.snakeplugin.gui.ArenaCreationFlow;
 import com.josebtan.snakeplugin.gui.SnakeGuiListener;
 import com.josebtan.snakeplugin.listener.SnakeInputListener;
 import com.josebtan.snakeplugin.listener.SnakeSteerPacketListener;
@@ -22,19 +23,23 @@ public final class SnakePlugin extends JavaPlugin {
         this.gameManager = new GameManager(this);
         this.arenaManager = new ArenaManager(this);
 
+        // El flujo de creacion de arenas por chat (nombre -> modo -> maximo de jugadores)
+        // lo comparten el comando /snake y el listener de la GUI.
+        ArenaCreationFlow creationFlow = new ArenaCreationFlow(arenaManager);
+
         // Etapa 2: comando definitivo /snake (reemplaza al /snakedebug de la Etapa 1).
         var snakeCommand = getCommand("snake");
         if (snakeCommand != null) {
-            SnakeCommand executor = new SnakeCommand(gameManager, arenaManager);
+            SnakeCommand executor = new SnakeCommand(gameManager, arenaManager, creationFlow);
             snakeCommand.setExecutor(executor);
             snakeCommand.setTabCompleter(executor);
         }
 
         getServer().getPluginManager().registerEvents(new SnakeInputListener(gameManager), this);
-        getServer().getPluginManager().registerEvents(new SnakeGuiListener(this, gameManager, arenaManager), this);
+        getServer().getPluginManager().registerEvents(new SnakeGuiListener(this, gameManager, arenaManager, creationFlow), this);
         new SnakeSteerPacketListener(this, gameManager).register();
 
-        getLogger().info("SnakePlugin habilitado (Etapa 2: arenas persistentes + menu de modo/color + comando /snake).");
+        getLogger().info("SnakePlugin habilitado (arenas persistentes con modo + maximo de jugadores, sala de espera, comando /snake).");
     }
 
     @Override

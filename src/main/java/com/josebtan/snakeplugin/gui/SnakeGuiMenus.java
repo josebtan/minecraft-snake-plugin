@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin.gui;
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.game.GameManager;
+import com.josebtan.snakeplugin.game.GameMode;
 import com.josebtan.snakeplugin.game.SnakeColor;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -22,15 +23,16 @@ import java.util.Set;
 /**
  * Construye y abre todos los menus del plugin:
  *
- *  1. Menu de MODO: "Un jugador" o "Multijugador" (paso 1 de unirse a una arena).
- *  2. Menu de COLOR: uno de los 8 colores de lana (paso 2). En modo multijugador, los
- *     colores que ya este usando otro jugador activo EN ESA MISMA ARENA aparecen
- *     bloqueados (bloque de barrera, no seleccionables). En modo "un jugador" no se
- *     bloquea nada.
- *  3. Menu de LISTA DE ARENAS: para elegir una arena (a la que unirse, o para
- *     eliminarla, segun el modo).
- *  4. Panel de CREACION/ADMINISTRACION de arenas: marcar esquinas, crear (pide el
- *     nombre por chat), ver y eliminar.
+ *  1. Menu de COLOR: uno de los 8 colores de lana. El modo de la arena ya se decidio al
+ *     crearla (ver com.josebtan.snakeplugin.game.GameMode), asi que este menu solo
+ *     adapta su comportamiento: en una arena multijugador, los colores ya reservados por
+ *     otros jugadores (en partida o en la sala de espera) aparecen bloqueados (bloque de
+ *     barrera). En una arena "un jugador" no se bloquea nada.
+ *  2. Menu de LISTA DE ARENAS: para elegir una arena (a la que unirse, o para
+ *     eliminarla, segun el modo). Muestra el modo y, en multijugador, cuantos jugadores
+ *     admite.
+ *  3. Panel de CREACION/ADMINISTRACION de arenas: marcar esquinas, crear (pide nombre,
+ *     modo y, si toca, maximo de jugadores por chat), ver y eliminar.
  *
  * SnakeGuiListener es quien reacciona a los clics dentro de estos inventarios.
  */
@@ -39,24 +41,10 @@ public final class SnakeGuiMenus {
     private SnakeGuiMenus() {
     }
 
-    /** Abre el menu de modo (paso 1) para la arena a la que el jugador quiere unirse. */
-    public static void openModeMenu(Player player, Arena arena) {
-        ModeMenuHolder holder = new ModeMenuHolder(arena);
-        Inventory inventory = Bukkit.createInventory(holder, 9,
-                Component.text("Snake: " + arena.getName(), NamedTextColor.DARK_GREEN));
-        holder.setInventory(inventory);
-
-        inventory.setItem(3, buildItem(Material.PLAYER_HEAD, NamedTextColor.AQUA, "Un jugador",
-                List.of("Juega tu solo.", "Todos los colores estan disponibles.")));
-        inventory.setItem(5, buildItem(Material.PLAYER_HEAD, NamedTextColor.GOLD, "Multijugador",
-                List.of("Juega junto a otros.", "Los colores ya elegidos", "no estaran disponibles.")));
-
-        player.openInventory(inventory);
-    }
-
-    /** Abre el menu de color (paso 2), ya sabiendo el modo elegido en el paso 1. */
-    public static void openColorMenu(Player player, Arena arena, boolean multiplayer, GameManager gameManager) {
-        ColorMenuHolder holder = new ColorMenuHolder(arena, multiplayer);
+    /** Abre el menu de color, ya sabiendo el modo de la arena (se lee de la propia arena). */
+    public static void openColorMenu(Player player, Arena arena, GameManager gameManager) {
+        boolean multiplayer = arena.getMode().isMultiplayer();
+        ColorMenuHolder holder = new ColorMenuHolder(arena);
         Inventory inventory = Bukkit.createInventory(holder, 9,
                 Component.text("Elige el color de tu serpiente", NamedTextColor.DARK_GREEN));
         holder.setInventory(inventory);
@@ -106,7 +94,12 @@ public final class SnakeGuiMenus {
             Arena arena = arenas.get(i);
             int width = arena.getMaxX() - arena.getMinX() + 1;
             int depth = arena.getMaxZ() - arena.getMinZ() + 1;
+            GameMode arenaMode = arena.getMode();
+            String modeText = arenaMode.isMultiplayer()
+                    ? arenaMode.getDisplayName() + " (hasta " + arena.getMaxPlayers() + " jugadores)"
+                    : arenaMode.getDisplayName();
             List<String> lore = List.of(
+                    "Modo: " + modeText,
                     "Mundo: " + arena.getWorld().getName(),
                     "Tamano: " + width + " x " + depth,
                     deleteMode ? "Haz clic para ELIMINARLA" : "Haz clic para unirte");

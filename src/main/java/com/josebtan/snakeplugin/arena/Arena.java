@@ -1,6 +1,7 @@
 package com.josebtan.snakeplugin.arena;
 
 import com.josebtan.snakeplugin.game.Direction;
+import com.josebtan.snakeplugin.game.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -31,8 +32,16 @@ public class Arena {
     private final int minZ;
     private final int maxZ;
     private final int boardY;
+    private final GameMode mode;
+    private final int maxPlayers;
 
     public Arena(String name, World world, int minX, int maxX, int minZ, int maxZ, int boardY) {
+        // Sobrecarga de compatibilidad: por defecto, una arena "un jugador".
+        this(name, world, minX, maxX, minZ, maxZ, boardY, GameMode.SOLO, 1);
+    }
+
+    public Arena(String name, World world, int minX, int maxX, int minZ, int maxZ, int boardY,
+                 GameMode mode, int maxPlayers) {
         this.name = name;
         this.world = world;
         this.minX = minX;
@@ -40,6 +49,8 @@ public class Arena {
         this.minZ = minZ;
         this.maxZ = maxZ;
         this.boardY = boardY;
+        this.mode = mode;
+        this.maxPlayers = maxPlayers;
     }
 
     /**
@@ -131,6 +142,16 @@ public class Arena {
 
     public int getBoardY() {
         return boardY;
+    }
+
+    /** Modo de juego de la arena: "Un jugador" (SOLO) o "Multijugador" (MULTIPLAYER). */
+    public GameMode getMode() {
+        return mode;
+    }
+
+    /** Cuantos jugadores maximo admite la arena por partida (solo relevante en modo MULTIPLAYER). */
+    public int getMaxPlayers() {
+        return maxPlayers;
     }
 
     public int getMinX() {

@@ -40,12 +40,15 @@ public class SnakeInputListener implements Listener {
         }
     }
 
-    /** Si el jugador se desconecta a mitad de partida, limpiamos su serpiente del mundo. */
+    /** Si el jugador se desconecta a mitad de partida, limpiamos su serpiente del mundo (y su sala de espera, si estaba en una). */
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         if (gameManager.hasGame(player)) {
             gameManager.stopGame(player);
+        }
+        if (gameManager.isInLobby(player)) {
+            gameManager.leaveLobby(player);
         }
     }
 }

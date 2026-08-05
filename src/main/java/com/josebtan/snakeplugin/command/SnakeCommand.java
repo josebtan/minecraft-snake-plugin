@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin.command;
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.game.GameManager;
+import com.josebtan.snakeplugin.gui.ArenaCreationFlow;
 import com.josebtan.snakeplugin.gui.ArenaListMenuHolder;
 import com.josebtan.snakeplugin.gui.SnakeGuiMenus;
 import net.kyori.adventure.text.Component;
@@ -23,12 +24,16 @@ import java.util.List;
  *   /snake arena menu              -> lo mismo, explicito
  *   /snake arena pos1              -> marca la esquina 1 de la arena (donde estas parado)
  *   /snake arena pos2              -> marca la esquina 2
- *   /snake arena create <nombre>   -> construye la arena entre pos1 y pos2 (se guarda en disco)
+ *   /snake arena create [nombre]   -> construye la arena entre pos1 y pos2. Pide por chat
+ *                                     el nombre (si no se dio), el MODO (solo/multi) y, en
+ *                                     modo multi, el maximo de jugadores (ver ArenaCreationFlow)
  *   /snake arena delete <nombre>   -> elimina esa arena (se guarda en disco)
  *   /snake arena list              -> lista las arenas creadas (texto)
- *   /snake join                    -> abre el menu para elegir arena (GUI), luego modo -> color
- *   /snake join <arena>            -> salta directo al menu de modo para esa arena
- *   /snake leave                   -> te levanta y elimina tu serpiente
+ *   /snake join                    -> abre el menu para elegir arena (GUI), luego color.
+ *                                     En arenas multijugador, entra en la sala de espera.
+ *   /snake join <arena>            -> salta directo al menu de color para esa arena
+ *   /snake leave                   -> te levanta y elimina tu serpiente (o te saca de la
+ *                                     sala de espera si todavia no habias empezado)
  *
  * La comida ya funciona (una por arena, compartida) y la cola crece al comer.
  */
@@ -36,10 +41,12 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
 
     private final GameManager gameManager;
     private final ArenaManager arenaManager;
+    private final ArenaCreationFlow creationFlow;
 
-    public SnakeCommand(GameManager gameManager, ArenaManager arenaManager) {
+    public SnakeCommand(GameManager gameManager, ArenaManager arenaManager, ArenaCreationFlow creationFlow) {
         this.gameManager = gameManager;
         this.arenaManager = arenaManager;
+        this.creationFlow = creationFlow;
     }
 
     @Override
@@ -85,17 +92,10 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             }
             case "create" -> {
                 if (args.length < 3) {
-                    player.sendMessage(Component.text("Uso: /snake arena create <nombre>"));
-                    return;
+                    creationFlow.start(player);
+                } else {
+                    creationFlow.startWithName(player, args[2]);
                 }
-                String name = args[2];
-                Arena arena = arenaManager.createFromPending(player, name);
-                if (arena == null) {
-                    player.sendMessage(Component.text(
-                            "Falta marcar pos1 y pos2 (en el mismo mundo) antes de crear la arena."));
-                    return;
-                }
-                player.sendMessage(Component.text("Arena '" + name + "' creada y guardada."));
             }
             case "delete" -> {
                 if (args.length < 3) {
@@ -122,8 +122,8 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleJoin(Player player, String[] args) {
-        if (gameManager.hasGame(player)) {
-            player.sendMessage(Component.text("Ya tienes una serpiente activa. Usa /snake leave primero."));
+        if (gameManager.hasGame(player) || gameManager.isInLobby(player)) {
+            player.sendMessage(Component.text("Ya tienes una serpiente activa o estas esperando. Usa /snake leave primero."));
             return;
         }
 
@@ -137,16 +137,21 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(Component.text("No existe ninguna arena con ese nombre. Usa /snake arena list."));
             return;
         }
-        SnakeGuiMenus.openModeMenu(player, arena);
+        SnakeGuiMenus.openColorMenu(player, arena, gameManager);
     }
 
     private void handleLeave(Player player) {
-        if (!gameManager.hasGame(player)) {
-            player.sendMessage(Component.text("No tienes ninguna serpiente activa."));
+        if (gameManager.hasGame(player)) {
+            gameManager.stopGame(player);
+            player.sendMessage(Component.text("Serpiente detenida."));
             return;
         }
-        gameManager.stopGame(player);
-        player.sendMessage(Component.text("Serpiente detenida."));
+        if (gameManager.isInLobby(player)) {
+            gameManager.leaveLobby(player);
+            player.sendMessage(Component.text("Has salido de la sala de espera."));
+            return;
+        }
+        player.sendMessage(Component.text("No tienes ninguna serpiente activa ni estas esperando."));
     }
 
     @Override
