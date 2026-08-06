@@ -144,6 +144,11 @@ public class ArenaManager {
      * jugador tenga marcadas en ese momento, el modo de juego elegido y, en modo
      * multijugador, el numero maximo de jugadores por partida. Se guarda en disco. Devuelve
      * null sin hacer nada si falta alguna esquina o si estan en mundos distintos.
+     *
+     * Al crearla con exito, se OLVIDAN pos1/pos2 de ese jugador: si no, el panel de
+     * creacion seguia mostrando "esquina ya marcada" para la arena siguiente, y crear una
+     * arena nueva sin volver a marcar esquinas terminaba reusando por accidente el mismo
+     * rectangulo de la anterior.
      */
     public Arena createFromPending(Player player, String name, GameMode mode, int maxPlayers) {
         Location pos1 = getPos1(player);
@@ -166,6 +171,9 @@ public class ArenaManager {
         Arena arena = new Arena(name, pos1.getWorld(), minX, maxX, minZ, maxZ, boardY, mode, maxPlayers);
         arenas.put(name.toLowerCase(), arena);
         save();
+
+        pendingPos1.remove(player.getUniqueId());
+        pendingPos2.remove(player.getUniqueId());
         return arena;
     }
 
