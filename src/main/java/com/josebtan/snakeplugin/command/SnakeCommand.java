@@ -137,6 +137,11 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(Component.text("No existe ninguna arena con ese nombre. Usa /snake arena list."));
             return;
         }
+        if (!arena.getMode().isMultiplayer() && !gameManager.isArenaAvailableForSolo(arena)) {
+            player.sendMessage(Component.text(
+                    "Esta arena es de un jugador y ya esta en uso. Espera a que termine o usa otra arena."));
+            return;
+        }
         SnakeGuiMenus.openColorMenu(player, arena, gameManager);
     }
 

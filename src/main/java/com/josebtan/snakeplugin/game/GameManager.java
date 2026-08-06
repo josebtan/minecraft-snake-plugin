@@ -95,6 +95,11 @@ public class GameManager {
         if (games.containsKey(id)) {
             return games.get(id);
         }
+        if (!arena.getMode().isMultiplayer() && !isArenaAvailableForSolo(arena)) {
+            // Red de seguridad: los puntos de entrada (GUI/comando) ya deberian haber
+            // avisado con un mensaje mas claro antes de llegar aca.
+            return null;
+        }
 
         SnakeGame game = new SnakeGame(id, color);
         if (!game.start(player, arena, arena.getMode().isMultiplayer())) {
@@ -106,6 +111,23 @@ public class GameManager {
 
         ensureLoopsRunning();
         return game;
+    }
+
+    /**
+     * true si esa arena de modo SOLO no tiene ya un jugador activo. Las arenas SOLO
+     * admiten un unico jugador a la vez (a diferencia de MULTIPLAYER, que usa la sala de
+     * espera + maximo de jugadores) — sin este chequeo, dos jugadores podrian entrar a la
+     * misma arena "de un jugador" al mismo tiempo, incluso con el mismo color de lana,
+     * ya que la validacion de colores solo corre para el modo multijugador.
+     */
+    public boolean isArenaAvailableForSolo(Arena arena) {
+        for (SnakeGame game : games.values()) {
+            Arena gameArena = game.getArena();
+            if (gameArena != null && gameArena.getName().equalsIgnoreCase(arena.getName())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

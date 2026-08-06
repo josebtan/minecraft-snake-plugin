@@ -155,6 +155,13 @@ public class SnakeGuiListener implements Listener {
             return;
         }
 
+        if (!arena.getMode().isMultiplayer() && !gameManager.isArenaAvailableForSolo(arena)) {
+            player.sendMessage(Component.text(
+                    "Esta arena es de un jugador y ya esta en uso. Espera a que termine o usa otra arena.",
+                    NamedTextColor.RED));
+            return;
+        }
+
         SnakeGame game = gameManager.startGame(player, arena, chosen);
         if (game == null) {
             player.sendMessage(Component.text(
@@ -182,6 +189,14 @@ public class SnakeGuiListener implements Listener {
             player.closeInventory();
             // Se reabre la lista (si queda alguna arena) para poder seguir eliminando sin repetir el comando.
             SnakeGuiMenus.openArenaListMenu(player, arenaManager, ArenaListMenuHolder.Mode.DELETE);
+            return;
+        }
+
+        if (!arena.getMode().isMultiplayer() && !gameManager.isArenaAvailableForSolo(arena)) {
+            player.closeInventory();
+            player.sendMessage(Component.text(
+                    "Esta arena es de un jugador y ya esta en uso. Espera a que termine o usa otra arena.",
+                    NamedTextColor.RED));
             return;
         }
 
