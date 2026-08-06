@@ -1,11 +1,14 @@
 package com.josebtan.snakeplugin.food;
 
 import com.josebtan.snakeplugin.arena.Arena;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.entity.Item;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.util.Vector;
+import org.bukkit.util.Transformation;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,19 +19,22 @@ import java.util.concurrent.ThreadLocalRandom;
  * Snake clasico), compartida por todos los jugadores que esten jugando ahi al mismo tiempo
  * (multijugador: el primero que llegue a la comida se la come).
  *
- * ETAPA 3 (v2): la comida ahora es un ITEM real tirado en el suelo (una manzana, zanahoria,
- * etc. al azar), no un bloque — visualmente mucho mas parecido a "comida" que un bloque de
- * glowstone. La deteccion de que la cabeza llego a la comida sigue siendo por COORDENADAS
- * (ver isFoodAt), no por tipo de bloque, asi que esto no afecta a la logica de choque en
- * SnakeGame#tick: un item no bloquea la casilla (el bloque ahi sigue siendo aire), por eso
- * el chequeo de "es comida" tiene que ir SIEMPRE antes que el chequeo de choque.
+ * ETAPA 5 (comida como ItemDisplay): antes la comida era un ITEM real tirado en el suelo
+ * (una manzana, zanahoria, etc. al azar). Tenia dos problemas:
+ *   1. Los items sueltos son pequenos y el cliente los deja de renderizar a poca distancia
+ *      ("solo se ve la comida estando encima de ella"). Como la camara es libre y la arena
+ *      puede ser grande, eso hacia la comida dificil de localizar.
+ *   2. Un item suelto necesita trucos (gravedad off, pickup delay, invulnerable...) para no
+ *      caerse, desaparecer o ser recogido por accidente.
+ * Ahora la comida es una entidad ItemDisplay: un item 3D anclado en su casilla, que se puede
+ * ESCALAR (Transformation) para que se vea bien grande, se le puede subir el rango de
+ * renderizado (setViewRange) para que se vea desde lejos, y no se puede recoger de ninguna
+ * forma (no es un item fisico).
  *
- * Al item se le desactiva la gravedad (para que no se caiga si no hay suelo solido debajo
- * de la arena) y el envejecimiento (para que no desaparezca solo tras 5 minutos en el
- * suelo, como hace normalmente cualquier item tirado en Minecraft), y se le pone un retraso
- * de recogida altisimo para que ningun jugador se lo lleve por accidente caminando cerca —
- * la unica forma de "comerselo" es que la cabeza de una serpiente llegue exactamente a su
- * casilla.
+ * La deteccion de que la cabeza llego a la comida sigue siendo por COORDENADAS (ver
+ * isFoodAt), no por tipo de bloque, asi que esto no afecta a la logica de choque en
+ * SnakeGame#tick: un ItemDisplay no bloquea la casilla (el bloque ahi sigue siendo aire),
+ * por eso el chequeo de "es comida" tiene que ir SIEMPRE antes que el chequeo de choque.
  */
 public class FoodManager {
 
@@ -38,8 +44,22 @@ public class FoodManager {
             Material.COOKED_BEEF, Material.GOLDEN_APPLE, Material.SWEET_BERRIES
     };
 
-    /** Registro de la comida activa de una arena: su posicion en la rejilla y el item en si. */
-    private record FoodEntry(Location location, Item entity) {
+    /** Escala de la comida (un item normal mide ~1 bloque; 0.8 lo deja bien grande y visible). */
+    private static final float FOOD_SCALE = 0.8f;
+
+    /**
+     * Rango de renderizado del ItemDisplay. Un ItemDisplay vanilla usa view_range=1.0, que
+     * se culea (deja de renderizar) a muy poca distancia — eso era en gran parte lo que
+     * hacia que la comida "solo se viera de cerca". Subirlo a 32 hace que se vea desde
+     * cualquier punto de la arena (el corte real lo da el render distance del servidor).
+     */
+    private static final float FOOD_VIEW_RANGE = 32f;
+
+    /** Cuanto flota la comida sobre su casilla (para que no quede incrustada en el suelo). */
+    private static final double FOOD_FLOAT_Y = 0.35;
+
+    /** Registro de la comida activa de una arena: su posicion en la rejilla y el ItemDisplay en si. */
+    private record FoodEntry(Location location, ItemDisplay entity) {
     }
 
     /** Comida actual por arena (clave: nombre de la arena en minusculas). */
@@ -68,13 +88,13 @@ public class FoodManager {
         }
     }
 
-    /** Elimina el item de comida actual del mundo y coloca uno nuevo en otro sitio libre. */
+    /** Elimina la comida actual del mundo y coloca una nueva en otro sitio libre. */
     public void consumeAndRespawn(Arena arena) {
         removeCurrent(arena);
         spawn(arena);
     }
 
-    /** Quita la comida de esa arena del registro y elimina el item del mundo si sigue vivo. */
+    /** Quita la comida de esa arena del registro y elimina el ItemDisplay del mundo si sigue vivo. */
     public void clear(Arena arena) {
         removeCurrent(arena);
     }
@@ -94,18 +114,27 @@ public class FoodManager {
             return;
         }
 
-        Location dropAt = cell.clone().add(0.5, 0.2, 0.5);
         Material foodType = FOOD_ITEMS[ThreadLocalRandom.current().nextInt(FOOD_ITEMS.length)];
-        Item item = dropAt.getWorld().dropItem(dropAt, new ItemStack(foodType));
+        Location displayAt = cell.clone().add(0.5, FOOD_FLOAT_Y, 0.5);
 
-        item.setVelocity(new Vector(0, 0, 0));
-        item.setGravity(false);
-        item.setWillAge(false);         // que no desaparezca solo tras un rato en el suelo
-        item.setPickupDelay(Short.MAX_VALUE); // que ningun jugador se lo lleve caminando cerca
-        item.setInvulnerable(true);
-        item.setGlowing(true);          // para que se distinga bien del suelo/decoracion
+        ItemDisplay display = displayAt.getWorld().spawn(displayAt, ItemDisplay.class, e -> {
+            e.setItemStack(new ItemStack(foodType));
+            e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
+            e.setInvulnerable(true);
+            e.setSilent(true);
+            e.setPersistent(true);
+            e.setGlowing(true);
+            e.setGlowColorOverride(Color.YELLOW);
+            e.setViewRange(FOOD_VIEW_RANGE);
+            e.setTransformation(new Transformation(
+                    new Vector3f(),        // sin desplazamiento extra
+                    new Quaternionf(),     // sin rotacion izquierda
+                    new Vector3f(FOOD_SCALE, FOOD_SCALE, FOOD_SCALE), // escala uniforme
+                    new Quaternionf()      // sin rotacion derecha
+            ));
+        });
 
-        foodByArena.put(key(arena), new FoodEntry(cell, item));
+        foodByArena.put(key(arena), new FoodEntry(cell, display));
     }
 
     private static String key(Arena arena) {

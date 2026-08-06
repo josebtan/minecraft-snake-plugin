@@ -25,10 +25,11 @@ pull request, con explicaciones incluidas en el codigo (comentarios en español)
   (ver la seccion de dependencias mas abajo): es necesario porque, estando
   sentado en una entidad invisible normal, Minecraft no ofrece ninguna forma
   nativa de saber que tecla pulsa el jugador.
-- Al pasar sobre la comida (un item de comida real tirado en el suelo — manzana,
-  zanahoria, pan, etc. al azar), la serpiente **crece**: se anade un nuevo
-  bloque a la cola, que sigue el recorrido exacto que hizo la cabeza (igual que en
-  el Snake clasico).
+- Al pasar sobre la comida (un item de comida visible — manzana, zanahoria, pan, etc. al
+  azar, mostrado como una entidad **ItemDisplay** grande y brillante que se ve desde
+  lejos), la serpiente **crece**: se anade un nuevo bloque a la cola, que sigue el
+  recorrido exacto que hizo la cabeza (igual que en el Snake clasico). Al comer suena un
+  sonido (solo lo oye el jugador de esa serpiente).
 - Chocar contra la cola propia, la de otro jugador, o contra el borde del campo de
   juego, termina la partida de ese jugador.
 
@@ -83,8 +84,10 @@ El desarrollo esta dividido en 4 etapas, tal y como se planifico:
   punto de aparicion es aleatorio dentro de la arena, verificando que haya
   espacio libre por delante para no chocar nada mas entrar.
 - [x] **Etapa 3 — Aparicion de comida, puntos y mecanicas del juego.**
-  Cada arena tiene su propia comida (un item real tirado en el suelo — manzana,
-  zanahoria, pan, carne, etc. al azar, brillante para que se note bien),
+  Cada arena tiene su propia comida (un item de comida visible — manzana,
+  zanahoria, pan, carne, etc. al azar, mostrado como una entidad **ItemDisplay**
+  grande y brillante, con escala y rango de renderizado ampliado para verse desde
+  lejos),
   compartida por todos los jugadores que esten jugando ahi a la vez — el
   primero que la alcance se la come. Al comer, suma un punto (aviso por
   action bar, para no llenar el chat) y aparece una comida nueva en otro

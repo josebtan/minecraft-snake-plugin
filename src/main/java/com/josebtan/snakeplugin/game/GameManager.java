@@ -3,6 +3,7 @@ package com.josebtan.snakeplugin.game;
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.food.FoodManager;
 import com.josebtan.snakeplugin.player.PlayerRecordManager;
+import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -331,6 +332,10 @@ public class GameManager {
                 case ATE -> {
                     boolean newRecord = recordManager.updateIfHigher(game.getPlayerId(), game.getScore());
                     if (player != null) {
+                        // Sonido de comer, SOLO para el jugador de esta serpiente (no se
+                        // oye en el resto de la arena).
+                        player.playSound(Sound.sound(org.bukkit.Sound.ENTITY_GENERIC_EAT.key(),
+                                Sound.Source.PLAYER, 1.0f, 1.0f));
                         String text = "¡Comiste! Puntos: " + game.getScore() + " | Largo: " + game.getLength();
                         if (newRecord) {
                             text += " | ¡Nuevo record!";
