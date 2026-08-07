@@ -26,9 +26,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Administra todas las partidas de snake activas en el servidor y los dos bucles que las
- * mantienen: uno de MOVIMIENTO (cada 8 ticks) y otro de MARCADOR (cada 20 ticks / 1s, para
- * que el cronometro del modo un jugador se vea contar en vivo).
+ * Administra todas las partidas de snake activas en el servidor y los bucles que las
+ * mantienen: uno de ANIMACION (cada tick de servidor, para que el asiento y los segmentos
+ * visibles se deslicen suavemente — ver SnakeGame#advanceSeatAnimation y
+ * SnakeGame#advanceDisplayAnimation), uno de MOVIMIENTO (cada 8 ticks) y otro de MARCADOR
+ * (cada 20 ticks / 1s, para que el cronometro del modo un jugador se vea contar en vivo).
  *
  * A diferencia de versiones anteriores, ya NO hay un bucle "de camara" que reteleporte al
  * jugador cada tick de servidor: al ir sentado en un ArmorStand invisible pegado al bloque
@@ -74,6 +76,7 @@ public class GameManager {
     private final PlayerRecordManager recordManager;
     private BukkitTask movementTask;
     private BukkitTask scoreboardTask;
+    private BukkitTask animationTask;
 
     public GameManager(Plugin plugin) {
         this.plugin = plugin;
@@ -262,6 +265,10 @@ public class GameManager {
             scoreboardTask = Bukkit.getScheduler()
                     .runTaskTimer(plugin, this::refreshScoreboards, SCOREBOARD_INTERVAL_TICKS, SCOREBOARD_INTERVAL_TICKS);
         }
+        if (animationTask == null) {
+            animationTask = Bukkit.getScheduler()
+                    .runTaskTimer(plugin, this::tickAnimation, 1L, 1L);
+        }
     }
 
     private void stopLoops() {
@@ -272,6 +279,10 @@ public class GameManager {
         if (scoreboardTask != null) {
             scoreboardTask.cancel();
             scoreboardTask = null;
+        }
+        if (animationTask != null) {
+            animationTask.cancel();
+            animationTask = null;
         }
     }
 
@@ -306,10 +317,22 @@ public class GameManager {
         Set<UUID> headOnLosers = resolveHeadOnCollisions();
 
         for (SnakeGame game : games.values()) {
-            boolean forcedCollision = headOnLosers.contains(game.getPlayerId());
-            TickResult result = forcedCollision ? game.collideHeadOn() : game.tick(foodManager);
             Player player = Bukkit.getPlayer(game.getPlayerId());
             Arena arena = game.getArena();
+
+            if (game.isInStartGrace()) {
+                // Retardo inicial: la serpiente aun no se mueve; solo se avisa de la
+                // cuenta atras para que el jugador sepa cuando va a arrancar.
+                if (player != null) {
+                    player.sendActionBar(Component.text(
+                            "La serpiente arranca en " + game.getStartGraceRemainingSeconds() + "s",
+                            NamedTextColor.GOLD));
+                }
+                continue;
+            }
+
+            boolean forcedCollision = headOnLosers.contains(game.getPlayerId());
+            TickResult result = forcedCollision ? game.collideHeadOn() : game.tick(foodManager);
 
             switch (result) {
                 case COLLIDED -> {
@@ -351,6 +374,18 @@ public class GameManager {
         }
         if (games.isEmpty()) {
             stopLoops();
+        }
+    }
+
+    /**
+     * Bucle de animacion (cada tick de servidor): hace avanzar el deslizamiento del
+     * asiento y de los displays del cuerpo de cada partida hacia su celda destino (ver
+     * SnakeGame#advanceSeatAnimation y SnakeGame#advanceDisplayAnimation).
+     */
+    private void tickAnimation() {
+        for (SnakeGame game : games.values()) {
+            game.advanceSeatAnimation();
+            game.advanceDisplayAnimation();
         }
     }
 

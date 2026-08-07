@@ -5,10 +5,12 @@ import com.josebtan.snakeplugin.food.FoodManager;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.UUID;
 
 /**
@@ -40,6 +42,17 @@ import java.util.UUID;
  * alrededor con normalidad mientras viaja, como si estuviera sentado en un
  * carrito de minas.
  *
+ * Al entrar a la arena la serpiente espera unos segundos sin moverse (retardo
+ * inicial, ver {@link #isInStartGrace}) y el asiento se desliza suavemente entre
+ * celdas (ver {@link #advanceSeatAnimation}): la logica de la serpiente sigue
+ * siendo de rejilla, solo se suaviza la vista del jugador que viaja en el asiento.
+ *
+ * VISUALIZACION: en el mundo, cada celda del cuerpo lleva un bloque BARRIER invisible
+ * (ver {@link #BODY_BLOCK}) que existe SOLO para las colisiones — la logica de
+ * {@link #tick} mira el bloque del mundo y no se toca. Lo que se VE es una display
+ * entity por segmento (ver {@link #spawnDisplay}) que se desliza suavemente de celda en
+ * celda (ver {@link #advanceDisplayAnimation}).
+ *
  * Las teclas WASD se leen con ProtocolLib (ver SnakeSteerPacketListener).
  */
 public class SnakeGame {
@@ -64,6 +77,30 @@ public class SnakeGame {
     /** Cuantas casillas libres por delante (en la direccion elegida) se exigen al elegir el punto de spawn. */
     private static final int SPAWN_CLEARANCE = 3;
 
+    /**
+     * Bloque que se coloca en el mundo en cada celda del cuerpo. Es un BARRIER: invisible
+     * y solido, existe solo para que la colision de {@link #tick} (que mira el bloque del
+     * mundo) siga funcionando igual que con lana. Lo que se VE es la display entity de
+     * cada segmento (ver {@link #spawnDisplay}).
+     */
+    private static final Material BODY_BLOCK = Material.BARRIER;
+
+    /**
+     * Segundos que espera la serpiente SIN MOVERSE tras entrar a la arena, para que el
+     * jugador pueda mirar a su alrededor y orientarse antes de que arranque.
+     */
+    private static final int START_DELAY_SECONDS = 3;
+
+    private static final long START_DELAY_MILLIS = START_DELAY_SECONDS * 1000L;
+
+    /**
+     * Pasos de la animacion (asiento y displays del cuerpo): uno por tick de servidor, de
+     * modo que en los MOVE_INTERVAL_TICKS que separan dos movimientos el asiento y cada
+     * segmento visible recorren la casilla entera y llegan justo a tiempo al siguiente
+     * salto (movimiento suave; la rejilla no cambia).
+     */
+    private static final int SEAT_ANIM_STEPS = 8;
+
     private final UUID playerId;
     private final SnakeColor color;
 
@@ -72,6 +109,18 @@ public class SnakeGame {
 
     /** Cuerpo completo de la serpiente: cabeza al frente (peekFirst), punta de cola al final (peekLast). */
     private final Deque<Location> body = new ArrayDeque<>();
+
+    /** Segmentos visibles: un BlockDisplay por segmento, alineado con {@link #body} (cabeza primero). */
+    private final Deque<BlockDisplay> displaySegments = new ArrayDeque<>();
+
+    /** De donde viene cada display (posicion previa) durante el deslizamiento. */
+    private final Deque<Location> displayFrom = new ArrayDeque<>();
+
+    /** Hacia donde va cada display (celda actual de su segmento) durante el deslizamiento. */
+    private final Deque<Location> displayTo = new ArrayDeque<>();
+
+    /** Paso actual del deslizamiento de los displays (0 = recien salido, SEAT_ANIM_STEPS = llegado). */
+    private int displayStep;
 
     /** Direccion en la que se esta moviendo la cabeza actualmente. */
     private Direction currentDirection;
@@ -86,6 +135,13 @@ public class SnakeGame {
 
     /** Asiento invisible (ArmorStand) sobre el que viaja el jugador, pegado al bloque de la cabeza. */
     private ArmorStand seat;
+
+    /** Trayecto que esta recorriendo el asiento entre dos celdas (movimiento suave). */
+    private Location seatFrom;
+    private Location seatTo;
+
+    /** Paso actual de la animacion del asiento (0 = acaba de salir, SEAT_ANIM_STEPS = llegado). */
+    private int seatStep;
 
     /** Donde estaba parado el jugador justo antes de unirse a la arena — para devolverlo ahi al salir/morir. */
     private Location returnLocation;
@@ -110,8 +166,9 @@ public class SnakeGame {
      * Inicia la partida dentro de la arena dada: elige una posicion Y direccion inicial
      * aleatorias y seguras (con espacio libre por delante en esa direccion — ver
      * Arena#findRandomSpawn, que prueba las 4 direcciones en cada celda, no solo "sur")
-     * para la cabeza (bloque de lana real), crea el asiento invisible justo encima, y
-     * monta al jugador en el.
+     * para la cabeza (bloque BARRIER invisible que solo sirve de colision; lo visible son
+     * las display entities, ver {@link #spawnDisplay}), crea el asiento invisible justo
+     * encima, y monta al jugador en el.
      *
      * @param multiplayer si la arena es multijugador (se decide al crearla, ver
      *                     com.josebtan.snakeplugin.game.GameMode): decide que tipo de
@@ -139,10 +196,19 @@ public class SnakeGame {
         this.active = true;
         this.score = 0;
 
-        spawn.location().getBlock().setType(color.getWoolMaterial());
+        spawn.location().getBlock().setType(BODY_BLOCK);
 
         this.seat = spawnSeat(spawn.location());
         seat.addPassenger(player);
+
+        // Asiento estatico hasta el primer movimiento (sin trayecto pendiente).
+        this.seatFrom = seat.getLocation().clone();
+        this.seatTo = seatFrom;
+        this.seatStep = SEAT_ANIM_STEPS;
+
+        // Primer segmento visible: solo la cabeza, hasta que la serpiente se mueva.
+        displaySegments.clear();
+        displaySegments.addLast(spawnDisplay(spawn.location()));
         return true;
     }
 
@@ -183,6 +249,15 @@ public class SnakeGame {
             seat.remove();
             seat = null;
         }
+        seatFrom = null;
+        seatTo = null;
+
+        for (BlockDisplay display : displaySegments) {
+            display.remove();
+        }
+        displaySegments.clear();
+        displayFrom.clear();
+        displayTo.clear();
 
         if (player != null && returnLocation != null) {
             player.teleport(returnLocation);
@@ -208,6 +283,45 @@ public class SnakeGame {
     }
 
     /**
+     * true mientras dura el retardo inicial de la partida (ver START_DELAY_SECONDS): la
+     * serpiente aun no se mueve, el jugador solo puede mirar a su alrededor (y pedir
+     * direccion, que se aplicara al primer movimiento).
+     */
+    public boolean isInStartGrace() {
+        return active && System.currentTimeMillis() - startTimeMillis < START_DELAY_MILLIS;
+    }
+
+    /** Segundos que quedan del retardo inicial (para el aviso al jugador). */
+    public int getStartGraceRemainingSeconds() {
+        long remaining = START_DELAY_MILLIS - (System.currentTimeMillis() - startTimeMillis);
+        return (int) Math.max(0, (remaining + 999) / 1000);
+    }
+
+    /**
+     * Avanza un paso la animacion del asiento hacia la celda destino registrada por el
+     * ultimo tick. La llama el bucle de animacion del GameManager cada tick de servidor;
+     * la logica de la serpiente sigue siendo de rejilla (solo se suaviza la vista del
+     * jugador, que viaja encima del asiento).
+     */
+    public void advanceSeatAnimation() {
+        if (seat == null || seatFrom == null || seatTo == null) {
+            return;
+        }
+        seatStep++;
+        if (seatStep >= SEAT_ANIM_STEPS) {
+            seat.teleport(seatTo);
+            seatFrom = null;
+            seatTo = null;
+            return;
+        }
+        double t = (double) seatStep / SEAT_ANIM_STEPS;
+        double x = seatFrom.getX() + (seatTo.getX() - seatFrom.getX()) * t;
+        double y = seatFrom.getY() + (seatTo.getY() - seatFrom.getY()) * t;
+        double z = seatFrom.getZ() + (seatTo.getZ() - seatFrom.getZ()) * t;
+        seat.teleport(new Location(seatFrom.getWorld(), x, y, z, seatFrom.getYaw(), seatFrom.getPitch()));
+    }
+
+    /**
      * Calcula a que casilla se moveria esta serpiente en el PROXIMO tick, sin aplicar nada
      * todavia (no pinta bloques, no mueve el asiento). Lo usa GameManager para detectar
      * choques de frente ANTES de que nadie se mueva de verdad: si dos serpientes planean
@@ -217,7 +331,7 @@ public class SnakeGame {
      * @return la casilla de destino planeada, o null si la partida no esta activa.
      */
     public Location peekNextHead() {
-        if (!active || body.isEmpty()) {
+        if (!active || isInStartGrace() || body.isEmpty()) {
             return null;
         }
         return body.peekFirst().clone().add(requestedDirection.getDx(), 0, requestedDirection.getDz());
@@ -245,6 +359,11 @@ public class SnakeGame {
      */
     public TickResult tick(FoodManager foodManager) {
         if (!active || body.isEmpty() || seat == null) {
+            return TickResult.ALIVE;
+        }
+        // Retardo inicial: al entrar a la arena la serpiente espera unos segundos sin
+        // moverse para que el jugador pueda orientarse (ver isInStartGrace).
+        if (isInStartGrace()) {
             return TickResult.ALIVE;
         }
 
@@ -276,10 +395,18 @@ public class SnakeGame {
             freedSegment.getBlock().setType(Material.AIR);
         }
 
-        newHead.getBlock().setType(color.getWoolMaterial());
+        newHead.getBlock().setType(BODY_BLOCK);
         body.addFirst(newHead);
 
-        seat.teleport(seatLocationFor(newHead));
+        // La parte visible (display entities) se desliza una celda hacia delante; la
+        // logica de rejilla y las colisiones (con los BARRIER) NO cambian.
+        slideDisplaySegments();
+
+        // El asiento no se salta de golpe: se registra el tramo y lo recorre suavemente el
+        // bucle de animacion (ver advanceSeatAnimation).
+        this.seatFrom = seat.getLocation().clone();
+        this.seatTo = seatLocationFor(newHead);
+        this.seatStep = 0;
 
         if (isFood) {
             score++;
@@ -294,6 +421,89 @@ public class SnakeGame {
                 && a.getBlockX() == b.getBlockX()
                 && a.getBlockY() == b.getBlockY()
                 && a.getBlockZ() == b.getBlockZ();
+    }
+
+    /** Posicion de la display entity para una celda del cuerpo: la esquina inferior del bloque. */
+    private Location displayLocationFor(Location cell) {
+        return cell.getBlock().getLocation();
+    }
+
+    /**
+     * Crea el BlockDisplay de un segmento: muestra el bloque de lana del color de esta
+     * serpiente en la celda dada. Es lo que se VE de la serpiente — el bloque real del
+     * mundo en esa celda es un BARRIER invisible (ver {@link #BODY_BLOCK}) que solo
+     * existe para las colisiones.
+     */
+    private BlockDisplay spawnDisplay(Location cell) {
+        Location at = displayLocationFor(cell);
+        return at.getWorld().spawn(at, BlockDisplay.class, display -> {
+            display.setBlock(color.getWoolMaterial().createBlockData());
+            display.setViewRange(32f);
+            display.setInvulnerable(true);
+            display.setSilent(true);
+            display.setPersistent(false);
+        });
+    }
+
+    /**
+     * Tras cada tick de movimiento re-alinea los displays con el cuerpo: cada segmento se
+     * desliza una celda hacia delante (el display pasa de su celda anterior a la celda de
+     * su segmento actual), lo que produce el movimiento fluido de la serpiente. Si la
+     * serpiente crecio este tick, aparece un display nuevo en la punta de la cola. La
+     * logica de rejilla NO se toca: esto es solo la parte visible.
+     */
+    private void slideDisplaySegments() {
+        displayFrom.clear();
+        displayTo.clear();
+        displayStep = 0;
+
+        Iterator<BlockDisplay> dispIt = displaySegments.iterator();
+        Iterator<Location> bodyIt = body.iterator();
+        while (dispIt.hasNext() && bodyIt.hasNext()) {
+            BlockDisplay display = dispIt.next();
+            displayFrom.addLast(display.getLocation());
+            displayTo.addLast(displayLocationFor(bodyIt.next()));
+        }
+        while (bodyIt.hasNext()) {
+            // La serpiente crecio: aparece un segmento nuevo en la punta de la cola.
+            Location cell = bodyIt.next();
+            displaySegments.addLast(spawnDisplay(cell));
+            Location at = displayLocationFor(cell);
+            displayFrom.addLast(at);
+            displayTo.addLast(at);
+        }
+    }
+
+    /**
+     * Avanza un paso el deslizamiento de todos los displays hacia su celda destino (ver
+     * {@link #slideDisplaySegments}). La llama el bucle de animacion del GameManager cada
+     * tick de servidor; los SEAT_ANIM_STEPS pasos coinciden con el intervalo de movimiento.
+     */
+    public void advanceDisplayAnimation() {
+        if (displayFrom.isEmpty() || displayTo.isEmpty() || displaySegments.isEmpty()) {
+            return;
+        }
+        displayStep++;
+        double t = Math.min(1.0, (double) displayStep / SEAT_ANIM_STEPS);
+
+        Iterator<BlockDisplay> dispIt = displaySegments.iterator();
+        Iterator<Location> fromIt = displayFrom.iterator();
+        Iterator<Location> toIt = displayTo.iterator();
+        while (dispIt.hasNext() && fromIt.hasNext() && toIt.hasNext()) {
+            BlockDisplay display = dispIt.next();
+            Location from = fromIt.next();
+            Location to = toIt.next();
+            double x = from.getX() + (to.getX() - from.getX()) * t;
+            double y = from.getY() + (to.getY() - from.getY()) * t;
+            double z = from.getZ() + (to.getZ() - from.getZ()) * t;
+            display.teleport(new Location(from.getWorld(), x, y, z));
+        }
+
+        if (displayStep >= SEAT_ANIM_STEPS) {
+            displayStep = 0;
+            displayFrom.clear();
+            displayTo.clear();
+        }
     }
 
     public UUID getPlayerId() {
