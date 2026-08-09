@@ -4,7 +4,9 @@ import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.game.GameManager;
 import com.josebtan.snakeplugin.game.GameMode;
-import com.josebtan.snakeplugin.game.SnakeColor;
+import com.josebtan.snakeplugin.skin.Skin;
+import com.josebtan.snakeplugin.skin.SkinGroup;
+import com.josebtan.snakeplugin.skin.SkinManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -23,15 +25,18 @@ import java.util.Set;
 /**
  * Construye y abre todos los menus del plugin:
  *
- *  1. Menu de COLOR: uno de los 8 colores de lana. El modo de la arena ya se decidio al
- *     crearla (ver com.josebtan.snakeplugin.game.GameMode), asi que este menu solo
- *     adapta su comportamiento: en una arena multijugador, los colores ya reservados por
- *     otros jugadores (en partida o en la sala de espera) aparecen bloqueados (bloque de
- *     barrera). En una arena "un jugador" no se bloquea nada.
- *  2. Menu de LISTA DE ARENAS: para elegir una arena (a la que unirse, o para
+ *  1. Menu de GRUPOS de SKINS: los grupos de bloques que puede usar el jugador como
+ *     "piel" de la serpiente (solo los grupos en los que tenga al menos una skin, ver
+ *     com.josebtan.snakeplugin.skin.SkinManager). El modo de la arena ya se decidio al
+ *     crearla (ver com.josebtan.snakeplugin.game.GameMode).
+ *  2. Menu de SKINS de un grupo: un item por bloque. En una arena multijugador, las
+ *     skins ya reservadas por otros jugadores (en partida o en la sala de espera)
+ *     aparecen bloqueadas (bloque de barrera). En una arena "un jugador" no se
+ *     bloquea nada.
+ *  3. Menu de LISTA DE ARENAS: para elegir una arena (a la que unirse, o para
  *     eliminarla, segun el modo). Muestra el modo y, en multijugador, cuantos jugadores
  *     admite.
- *  3. Panel de CREACION/ADMINISTRACION de arenas: marcar esquinas, crear (pide nombre,
+ *  4. Panel de CREACION/ADMINISTRACION de arenas: marcar esquinas, crear (pide nombre,
  *     modo y, si toca, maximo de jugadores por chat), ver y eliminar.
  *
  * SnakeGuiListener es quien reacciona a los clics dentro de estos inventarios.
@@ -41,27 +46,72 @@ public final class SnakeGuiMenus {
     private SnakeGuiMenus() {
     }
 
-    /** Abre el menu de color, ya sabiendo el modo de la arena (se lee de la propia arena). */
-    public static void openColorMenu(Player player, Arena arena, GameManager gameManager) {
-        boolean multiplayer = arena.getMode().isMultiplayer();
-        ColorMenuHolder holder = new ColorMenuHolder(arena);
-        Inventory inventory = Bukkit.createInventory(holder, 9,
-                Component.text("Elige el color de tu serpiente", NamedTextColor.DARK_GREEN));
+    /**
+     * Abre el menu de GRUPOS de skins que el jugador puede usar. Si solo hay un grupo
+     * disponible, salta directo a sus skins (ahorra un clic en el caso mas comun).
+     */
+    public static void openSkinGroupMenu(Player player, Arena arena, GameManager gameManager,
+                                         SkinManager skinManager) {
+        List<SkinGroup> accessible = skinManager.getAccessibleGroups(player);
+        if (accessible.isEmpty()) {
+            player.sendMessage(Component.text(
+                    "No tienes ninguna skin disponible. Habla con un administrador para que te de permisos.",
+                    NamedTextColor.RED));
+            return;
+        }
+        if (accessible.size() == 1) {
+            openSkinMenu(player, arena, accessible.get(0), gameManager, skinManager);
+            return;
+        }
+
+        SkinGroupMenuHolder holder = new SkinGroupMenuHolder(arena, accessible);
+        int size = Math.max(9, ((accessible.size() - 1) / 9 + 1) * 9);
+        Inventory inventory = Bukkit.createInventory(holder, size,
+                Component.text("Elige un grupo de skins", NamedTextColor.DARK_GREEN));
         holder.setInventory(inventory);
 
-        Set<SnakeColor> taken = multiplayer ? gameManager.getColorsInUse(arena) : Set.of();
+        for (int i = 0; i < accessible.size(); i++) {
+            SkinGroup group = accessible.get(i);
+            inventory.setItem(i, buildItem(group.getIcon(), NamedTextColor.WHITE, group.getDisplayName(),
+                    List.of(skinManager.getAccessibleSkins(player, group).size() + " skins disponibles",
+                            "Haz clic para verlas.")));
+        }
 
-        SnakeColor[] colors = SnakeColor.values();
-        for (int i = 0; i < colors.length; i++) {
-            SnakeColor color = colors[i];
-            boolean available = !taken.contains(color);
+        player.openInventory(inventory);
+    }
+
+    /**
+     * Abre el menu de SKINS de un grupo: un item por bloque que el jugador puede usar.
+     * En una arena multijugador, las skins ya reservadas se bloquean (bloque de barrera).
+     */
+    public static void openSkinMenu(Player player, Arena arena, SkinGroup group,
+                                    GameManager gameManager, SkinManager skinManager) {
+        List<Skin> accessible = skinManager.getAccessibleSkins(player, group);
+        if (accessible.isEmpty()) {
+            player.sendMessage(Component.text("No tienes skins disponibles en ese grupo.",
+                    NamedTextColor.RED));
+            return;
+        }
+        boolean multiplayer = arena.getMode().isMultiplayer();
+        Set<Skin> taken = multiplayer ? gameManager.getSkinsInUse(arena) : Set.of();
+
+        SkinMenuHolder holder = new SkinMenuHolder(arena, group, accessible);
+        int size = Math.max(9, ((accessible.size() - 1) / 9 + 1) * 9);
+        Inventory inventory = Bukkit.createInventory(holder, size,
+                Component.text("Elige la skin de tu serpiente", NamedTextColor.DARK_GREEN));
+        holder.setInventory(inventory);
+
+        for (int i = 0; i < accessible.size(); i++) {
+            Skin skin = accessible.get(i);
+            boolean available = !taken.contains(skin);
             if (available) {
-                inventory.setItem(i, buildItem(color.getWoolMaterial(), NamedTextColor.WHITE,
-                        color.getDisplayName(), List.of("Haz clic para empezar a jugar.")));
+                inventory.setItem(i, buildItem(skin.getMaterial(), NamedTextColor.WHITE,
+                        skin.getDisplayName(),
+                        List.of("Grupo: " + group.getDisplayName(), "Haz clic para empezar a jugar.")));
             } else {
                 inventory.setItem(i, buildItem(Material.BARRIER, NamedTextColor.RED,
-                        color.getDisplayName() + " (ocupado)",
-                        List.of("Otro jugador ya esta usando", "este color en esta arena.")));
+                        skin.getDisplayName() + " (ocupado)",
+                        List.of("Otro jugador ya esta usando", "esta skin en esta arena.")));
             }
         }
 

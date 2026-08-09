@@ -2,10 +2,12 @@ package com.josebtan.snakeplugin.command;
 
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.arena.ArenaManager;
+import com.josebtan.snakeplugin.config.SnakeConfig;
 import com.josebtan.snakeplugin.game.GameManager;
 import com.josebtan.snakeplugin.gui.ArenaCreationFlow;
 import com.josebtan.snakeplugin.gui.ArenaListMenuHolder;
 import com.josebtan.snakeplugin.gui.SnakeGuiMenus;
+import com.josebtan.snakeplugin.skin.SkinManager;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -29,11 +31,13 @@ import java.util.List;
  *                                     modo multi, el maximo de jugadores (ver ArenaCreationFlow)
  *   /snake arena delete <nombre>   -> elimina esa arena (se guarda en disco)
  *   /snake arena list              -> lista las arenas creadas (texto)
- *   /snake join                    -> abre el menu para elegir arena (GUI), luego color.
+ *   /snake join                    -> abre el menu para elegir arena (GUI), luego skin.
  *                                     En arenas multijugador, entra en la sala de espera.
- *   /snake join <arena>            -> salta directo al menu de color para esa arena
+ *   /snake join <arena>            -> salta directo al menu de skins para esa arena
  *   /snake leave                   -> te levanta y elimina tu serpiente (o te saca de la
  *                                     sala de espera si todavia no habias empezado)
+ *   /snake reload                  -> recarga config.yml (modo de movimiento y skins) sin
+ *                                     reiniciar el servidor (permiso snakeplugin.reload)
  *
  * La comida ya funciona (una por arena, compartida) y la cola crece al comer.
  */
@@ -42,11 +46,16 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
     private final GameManager gameManager;
     private final ArenaManager arenaManager;
     private final ArenaCreationFlow creationFlow;
+    private final SnakeConfig snakeConfig;
+    private final SkinManager skinManager;
 
-    public SnakeCommand(GameManager gameManager, ArenaManager arenaManager, ArenaCreationFlow creationFlow) {
+    public SnakeCommand(GameManager gameManager, ArenaManager arenaManager, ArenaCreationFlow creationFlow,
+                        SnakeConfig snakeConfig, SkinManager skinManager) {
         this.gameManager = gameManager;
         this.arenaManager = arenaManager;
         this.creationFlow = creationFlow;
+        this.snakeConfig = snakeConfig;
+        this.skinManager = skinManager;
     }
 
     @Override
@@ -57,7 +66,7 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 0) {
-            player.sendMessage(Component.text("Uso: /snake <arena|join|leave>"));
+            player.sendMessage(Component.text("Uso: /snake <arena|join|leave|reload>"));
             return true;
         }
 
@@ -65,9 +74,22 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             case "arena" -> handleArena(player, args);
             case "join" -> handleJoin(player, args);
             case "leave" -> handleLeave(player);
-            default -> player.sendMessage(Component.text("Uso: /snake <arena|join|leave>"));
+            case "reload" -> handleReload(player);
+            default -> player.sendMessage(Component.text("Uso: /snake <arena|join|leave|reload>"));
         }
         return true;
+    }
+
+    private void handleReload(Player player) {
+        if (!player.hasPermission("snakeplugin.reload")) {
+            player.sendMessage(Component.text("No tienes permiso para recargar la configuracion."));
+            return;
+        }
+        snakeConfig.reload();
+        skinManager.reload();
+        player.sendMessage(Component.text(
+                "Configuracion recargada. Modo de movimiento: "
+                        + (snakeConfig.isSmoothMovement() ? "suave" : "clasico") + "."));
     }
 
     private void handleArena(Player player, String[] args) {
@@ -142,7 +164,7 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
                     "Esta arena es de un jugador y ya esta en uso. Espera a que termine o usa otra arena."));
             return;
         }
-        SnakeGuiMenus.openColorMenu(player, arena, gameManager);
+        SnakeGuiMenus.openSkinGroupMenu(player, arena, gameManager, skinManager);
     }
 
     private void handleLeave(Player player) {
@@ -166,6 +188,7 @@ public class SnakeCommand implements CommandExecutor, TabCompleter {
             options.add("arena");
             options.add("join");
             options.add("leave");
+            options.add("reload");
         } else if (args.length == 2 && args[0].equalsIgnoreCase("arena")) {
             options.add("menu");
             options.add("pos1");

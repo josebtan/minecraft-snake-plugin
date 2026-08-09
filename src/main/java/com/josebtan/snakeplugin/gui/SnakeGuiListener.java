@@ -3,8 +3,10 @@ package com.josebtan.snakeplugin.gui;
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.arena.ArenaManager;
 import com.josebtan.snakeplugin.game.GameManager;
-import com.josebtan.snakeplugin.game.SnakeColor;
 import com.josebtan.snakeplugin.game.SnakeGame;
+import com.josebtan.snakeplugin.skin.Skin;
+import com.josebtan.snakeplugin.skin.SkinGroup;
+import com.josebtan.snakeplugin.skin.SkinManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -41,13 +43,15 @@ public class SnakeGuiListener implements Listener {
     private final GameManager gameManager;
     private final ArenaManager arenaManager;
     private final ArenaCreationFlow creationFlow;
+    private final SkinManager skinManager;
 
     public SnakeGuiListener(Plugin plugin, GameManager gameManager, ArenaManager arenaManager,
-                            ArenaCreationFlow creationFlow) {
+                            ArenaCreationFlow creationFlow, SkinManager skinManager) {
         this.plugin = plugin;
         this.gameManager = gameManager;
         this.arenaManager = arenaManager;
         this.creationFlow = creationFlow;
+        this.skinManager = skinManager;
     }
 
     @EventHandler
@@ -78,8 +82,10 @@ public class SnakeGuiListener implements Listener {
             return;
         }
 
-        if (holder instanceof ColorMenuHolder colorHolder) {
-            handleColorClick(player, colorHolder, event.getSlot());
+        if (holder instanceof SkinGroupMenuHolder groupHolder) {
+            handleSkinGroupClick(player, groupHolder, event.getSlot());
+        } else if (holder instanceof SkinMenuHolder skinHolder) {
+            handleSkinClick(player, skinHolder, event.getSlot());
         } else if (holder instanceof ArenaListMenuHolder listHolder) {
             handleArenaListClick(player, listHolder, event.getSlot());
         } else if (holder instanceof ArenaCreateMenuHolder) {
@@ -115,12 +121,19 @@ public class SnakeGuiListener implements Listener {
         creationFlow.clearPending(event.getPlayer());
     }
 
-    private void handleColorClick(Player player, ColorMenuHolder holder, int slot) {
-        SnakeColor[] colors = SnakeColor.values();
-        if (slot < 0 || slot >= colors.length) {
+    private void handleSkinGroupClick(Player player, SkinGroupMenuHolder holder, int slot) {
+        SkinGroup group = holder.getGroupAt(slot);
+        if (group == null) {
             return;
         }
-        SnakeColor chosen = colors[slot];
+        SnakeGuiMenus.openSkinMenu(player, holder.getArena(), group, gameManager, skinManager);
+    }
+
+    private void handleSkinClick(Player player, SkinMenuHolder holder, int slot) {
+        Skin chosen = holder.getSkinAt(slot);
+        if (chosen == null) {
+            return;
+        }
         Arena arena = holder.getArena();
 
         if (gameManager.hasGame(player) || gameManager.isInLobby(player)) {
@@ -133,13 +146,13 @@ public class SnakeGuiListener implements Listener {
         player.closeInventory();
 
         if (arena.getMode().isMultiplayer()) {
-            Set<SnakeColor> taken = gameManager.getColorsInUse(arena);
+            Set<Skin> taken = gameManager.getSkinsInUse(arena);
             if (taken.contains(chosen)) {
                 player.sendMessage(Component.text(
-                        "Ese color ya lo esta usando otro jugador en esta arena. Elige otro.",
+                        "Esa skin ya la esta usando otro jugador en esta arena. Elige otra.",
                         NamedTextColor.RED));
-                // Se refresca el menu para que el jugador vea el estado actual actualizado.
-                SnakeGuiMenus.openColorMenu(player, arena, gameManager);
+                // Se refresca el menu para que el jugador vea el estado actualizado.
+                SnakeGuiMenus.openSkinMenu(player, arena, holder.getGroup(), gameManager, skinManager);
                 return;
             }
             if (!gameManager.joinMultiplayerLobby(player, arena, chosen)) {
@@ -201,7 +214,7 @@ public class SnakeGuiListener implements Listener {
         }
 
         player.closeInventory();
-        SnakeGuiMenus.openColorMenu(player, arena, gameManager);
+        SnakeGuiMenus.openSkinGroupMenu(player, arena, gameManager, skinManager);
     }
 
     private void handleArenaCreateClick(Player player, int slot) {
@@ -244,7 +257,8 @@ public class SnakeGuiListener implements Listener {
     }
 
     private boolean isOurHolder(InventoryHolder holder) {
-        return holder instanceof ColorMenuHolder
+        return holder instanceof SkinGroupMenuHolder
+                || holder instanceof SkinMenuHolder
                 || holder instanceof ArenaListMenuHolder
                 || holder instanceof ArenaCreateMenuHolder;
     }

@@ -1,8 +1,10 @@
 package com.josebtan.snakeplugin.game;
 
 import com.josebtan.snakeplugin.arena.Arena;
+import com.josebtan.snakeplugin.config.SnakeConfig;
 import com.josebtan.snakeplugin.food.FoodManager;
 import com.josebtan.snakeplugin.player.PlayerRecordManager;
+import com.josebtan.snakeplugin.skin.Skin;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -70,6 +72,7 @@ public class GameManager {
     private static final long LOBBY_WAIT_SECONDS = 15L;
 
     private final Plugin plugin;
+    private final SnakeConfig config;
     private final Map<UUID, SnakeGame> games = new ConcurrentHashMap<>();
     private final Map<String, Lobby> lobbies = new ConcurrentHashMap<>();
     private final FoodManager foodManager = new FoodManager();
@@ -78,8 +81,9 @@ public class GameManager {
     private BukkitTask scoreboardTask;
     private BukkitTask animationTask;
 
-    public GameManager(Plugin plugin) {
+    public GameManager(Plugin plugin, SnakeConfig config) {
         this.plugin = plugin;
+        this.config = config;
         this.recordManager = new PlayerRecordManager(plugin);
     }
 
@@ -88,13 +92,14 @@ public class GameManager {
     }
 
     /**
-     * Crea e inicia una partida nueva para el jugador dentro de la arena dada, con el color
-     * elegido en el menu, si no tiene ya una activa. El modo (un jugador / multijugador) NO
+     * Crea e inicia una partida nueva para el jugador dentro de la arena dada, con la skin
+     * elegida en el menu, si no tiene ya una activa. El modo (un jugador / multijugador) NO
      * se elige aqui: lo decide la propia arena (ver Arena#getMode) — el modo decide que
-     * scoreboard vera el jugador. Devuelve null si la arena no tiene ningun punto libre donde
+     * scoreboard vera el jugador. El modo de movimiento (suave/clasico) se lee de la config
+     * (ver SnakeConfig). Devuelve null si la arena no tiene ningun punto libre donde
      * aparecer (ver Arena#findRandomSpawn / SnakeGame#start) — en ese caso no se crea nada.
      */
-    public SnakeGame startGame(Player player, Arena arena, SnakeColor color) {
+    public SnakeGame startGame(Player player, Arena arena, Skin skin) {
         UUID id = player.getUniqueId();
         if (games.containsKey(id)) {
             return games.get(id);
@@ -105,7 +110,7 @@ public class GameManager {
             return null;
         }
 
-        SnakeGame game = new SnakeGame(id, color);
+        SnakeGame game = new SnakeGame(id, skin, config.isSmoothMovement());
         if (!game.start(player, arena, arena.getMode().isMultiplayer())) {
             return null;
         }
@@ -121,8 +126,8 @@ public class GameManager {
      * true si esa arena de modo SOLO no tiene ya un jugador activo. Las arenas SOLO
      * admiten un unico jugador a la vez (a diferencia de MULTIPLAYER, que usa la sala de
      * espera + maximo de jugadores) — sin este chequeo, dos jugadores podrian entrar a la
-     * misma arena "de un jugador" al mismo tiempo, incluso con el mismo color de lana,
-     * ya que la validacion de colores solo corre para el modo multijugador.
+     * misma arena "de un jugador" al mismo tiempo, incluso con la misma skin,
+     * ya que la validacion de skins solo corre para el modo multijugador.
      */
     public boolean isArenaAvailableForSolo(Arena arena) {
         for (SnakeGame game : games.values()) {
@@ -135,22 +140,22 @@ public class GameManager {
     }
 
     /**
-     * Colores ya en uso/reservados EN ESA MISMA ARENA: los de las partidas activas mas los
-     * de la sala de espera en curso (para el menu de seleccion de color y para validar el
+     * Skins ya en uso/reservadas EN ESA MISMA ARENA: las de las partidas activas mas las
+     * de la sala de espera en curso (para el menu de seleccion de skin y para validar el
      * clic en una arena multijugador).
      */
-    public Set<SnakeColor> getColorsInUse(Arena arena) {
-        Set<SnakeColor> inUse = new HashSet<>();
+    public Set<Skin> getSkinsInUse(Arena arena) {
+        Set<Skin> inUse = new HashSet<>();
         for (SnakeGame game : games.values()) {
             Arena gameArena = game.getArena();
             if (gameArena != null && gameArena.getName().equalsIgnoreCase(arena.getName())) {
-                inUse.add(game.getColor());
+                inUse.add(game.getSkin());
             }
         }
         Lobby lobby = lobbies.get(arena.getName().toLowerCase());
         if (lobby != null) {
             for (LobbyMember member : lobby.members) {
-                inUse.add(member.color());
+                inUse.add(member.skin());
             }
         }
         return inUse;
@@ -158,16 +163,16 @@ public class GameManager {
 
     /**
      * Anade al jugador a la sala de espera de la arena multijugador (o crea la sala si no
-     * existe). Reserva su color para que nadie mas pueda elegirlo. Devuelve false si la
-     * arena ya esta llena (sala completa o partida con el maximo de jugadores) o si ese
-     * color ya esta reservado.
+     * existe). Reserva su skin para que nadie mas pueda elegirla. Devuelve false si la
+     * arena ya esta llena (sala completa o partida con el maximo de jugadores) o si esa
+     * skin ya esta reservada.
      */
-    public boolean joinMultiplayerLobby(Player player, Arena arena, SnakeColor color) {
+    public boolean joinMultiplayerLobby(Player player, Arena arena, Skin skin) {
         String key = arena.getName().toLowerCase();
         Lobby lobby = lobbies.get(key);
 
         if (lobby == null) {
-            if (getColorsInUse(arena).contains(color)) {
+            if (getSkinsInUse(arena).contains(skin)) {
                 return false;
             }
             lobby = new Lobby(arena);
@@ -182,11 +187,11 @@ public class GameManager {
                 return true; // ya esta esperando, no se duplica
             }
         }
-        if (getColorsInUse(arena).contains(color)) {
+        if (getSkinsInUse(arena).contains(skin)) {
             return false;
         }
 
-        lobby.members.add(new LobbyMember(player.getUniqueId(), color));
+        lobby.members.add(new LobbyMember(player.getUniqueId(), skin));
         lobby.countdownSeconds = LOBBY_WAIT_SECONDS;
         if (lobby.task == null) {
             Lobby tracked = lobby; // copia final para usarla dentro de la lambda
@@ -620,12 +625,12 @@ public class GameManager {
     // Sala de espera (lobby) de las arenas multijugador
     // ---------------------------------------------------------------------
 
-    /** Un jugador esperando en una sala: su UUID y el color de lana reservado. */
-    private record LobbyMember(UUID playerId, SnakeColor color) {
+    /** Un jugador esperando en una sala: su UUID y la skin reservada. */
+    private record LobbyMember(UUID playerId, Skin skin) {
     }
 
     /**
-     * Sala de espera de una arena multijugador: los jugadores que ya eligieron color y
+     * Sala de espera de una arena multijugador: los jugadores que ya eligieron skin y
      * estan esperando a que se llene la partida (o a que caduque el temporizador). Cada
      * sala tiene su propia tarea de cuenta atras (una vez por segundo) que actualiza la
      * info que ven los jugadores y arranca la partida cuando toca.
@@ -681,7 +686,7 @@ public class GameManager {
             if (player == null) {
                 continue; // se desconecto mientras esperaba
             }
-            SnakeGame game = startGame(player, lobby.arena, member.color());
+            SnakeGame game = startGame(player, lobby.arena, member.skin());
             if (game == null) {
                 player.sendMessage(Component.text(
                         "No se encontro un sitio libre para aparecer en '" + lobby.arena.getName()
@@ -689,7 +694,7 @@ public class GameManager {
             } else {
                 player.sendMessage(Component.text(
                         "¡La partida empieza! Serpiente "
-                                + member.color().getDisplayName().toLowerCase() + " en '"
+                                + member.skin().getDisplayName().toLowerCase() + " en '"
                                 + lobby.arena.getName() + "'. Usa W/A/S/D para dirigirla.",
                         NamedTextColor.GREEN));
             }

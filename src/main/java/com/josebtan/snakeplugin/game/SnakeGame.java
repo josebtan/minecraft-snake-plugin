@@ -2,6 +2,7 @@ package com.josebtan.snakeplugin.game;
 
 import com.josebtan.snakeplugin.arena.Arena;
 import com.josebtan.snakeplugin.food.FoodManager;
+import com.josebtan.snakeplugin.skin.Skin;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.ArmorStand;
@@ -102,7 +103,14 @@ public class SnakeGame {
     private static final int SEAT_ANIM_STEPS = 8;
 
     private final UUID playerId;
-    private final SnakeColor color;
+    private final Skin skin;
+
+    /**
+     * Modo de movimiento (de la config): true = suave (asiento y displays se deslizan),
+     * false = clasico (el cuerpo es lana que salta de bloque en bloque y el asiento se
+     * teletransporta).
+     */
+    private final boolean smoothMovement;
 
     /** Arena (campo de juego) donde vive esta partida. */
     private Arena arena;
@@ -157,9 +165,10 @@ public class SnakeGame {
     /** System.currentTimeMillis() de cuando arranco la partida, para calcular el tiempo jugado. */
     private long startTimeMillis;
 
-    public SnakeGame(UUID playerId, SnakeColor color) {
+    public SnakeGame(UUID playerId, Skin skin, boolean smoothMovement) {
         this.playerId = playerId;
-        this.color = color;
+        this.skin = skin;
+        this.smoothMovement = smoothMovement;
     }
 
     /**
@@ -196,19 +205,26 @@ public class SnakeGame {
         this.active = true;
         this.score = 0;
 
-        spawn.location().getBlock().setType(BODY_BLOCK);
-
         this.seat = spawnSeat(spawn.location());
         seat.addPassenger(player);
 
-        // Asiento estatico hasta el primer movimiento (sin trayecto pendiente).
-        this.seatFrom = seat.getLocation().clone();
-        this.seatTo = seatFrom;
-        this.seatStep = SEAT_ANIM_STEPS;
+        if (smoothMovement) {
+            // Modo suave: la celda lleva un BARRIER invisible (solo colision) y lo que se
+            // ve es la display entity, que se deslizara de celda en celda.
+            spawn.location().getBlock().setType(BODY_BLOCK);
 
-        // Primer segmento visible: solo la cabeza, hasta que la serpiente se mueva.
-        displaySegments.clear();
-        displaySegments.addLast(spawnDisplay(spawn.location()));
+            // Asiento estatico hasta el primer movimiento (sin trayecto pendiente).
+            this.seatFrom = seat.getLocation().clone();
+            this.seatTo = seatFrom;
+            this.seatStep = SEAT_ANIM_STEPS;
+
+            // Primer segmento visible: solo la cabeza, hasta que la serpiente se mueva.
+            displaySegments.clear();
+            displaySegments.addLast(spawnDisplay(spawn.location()));
+        } else {
+            // Modo clasico: el bloque de la skin directamente, como siempre.
+            spawn.location().getBlock().setType(skin.getMaterial());
+        }
         return true;
     }
 
@@ -395,18 +411,25 @@ public class SnakeGame {
             freedSegment.getBlock().setType(Material.AIR);
         }
 
-        newHead.getBlock().setType(BODY_BLOCK);
         body.addFirst(newHead);
 
-        // La parte visible (display entities) se desliza una celda hacia delante; la
-        // logica de rejilla y las colisiones (con los BARRIER) NO cambian.
-        slideDisplaySegments();
+        if (smoothMovement) {
+            newHead.getBlock().setType(BODY_BLOCK);
 
-        // El asiento no se salta de golpe: se registra el tramo y lo recorre suavemente el
-        // bucle de animacion (ver advanceSeatAnimation).
-        this.seatFrom = seat.getLocation().clone();
-        this.seatTo = seatLocationFor(newHead);
-        this.seatStep = 0;
+            // La parte visible (display entities) se desliza una celda hacia delante; la
+            // logica de rejilla y las colisiones (con los BARRIER) NO cambian.
+            slideDisplaySegments();
+
+            // El asiento no se salta de golpe: se registra el tramo y lo recorre suavemente
+            // el bucle de animacion (ver advanceSeatAnimation).
+            this.seatFrom = seat.getLocation().clone();
+            this.seatTo = seatLocationFor(newHead);
+            this.seatStep = 0;
+        } else {
+            // Modo clasico: se pinta el bloque de la skin y el asiento salta de golpe.
+            newHead.getBlock().setType(skin.getMaterial());
+            seat.teleport(seatLocationFor(newHead));
+        }
 
         if (isFood) {
             score++;
@@ -429,7 +452,7 @@ public class SnakeGame {
     }
 
     /**
-     * Crea el BlockDisplay de un segmento: muestra el bloque de lana del color de esta
+     * Crea el BlockDisplay de un segmento: muestra el bloque de la skin de esta
      * serpiente en la celda dada. Es lo que se VE de la serpiente — el bloque real del
      * mundo en esa celda es un BARRIER invisible (ver {@link #BODY_BLOCK}) que solo
      * existe para las colisiones.
@@ -437,7 +460,7 @@ public class SnakeGame {
     private BlockDisplay spawnDisplay(Location cell) {
         Location at = displayLocationFor(cell);
         return at.getWorld().spawn(at, BlockDisplay.class, display -> {
-            display.setBlock(color.getWoolMaterial().createBlockData());
+            display.setBlock(skin.getMaterial().createBlockData());
             display.setViewRange(32f);
             display.setInvulnerable(true);
             display.setSilent(true);
@@ -510,8 +533,8 @@ public class SnakeGame {
         return playerId;
     }
 
-    public SnakeColor getColor() {
-        return color;
+    public Skin getSkin() {
+        return skin;
     }
 
     public Arena getArena() {

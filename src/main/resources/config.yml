@@ -1,0 +1,78 @@
+# ============================================================
+#  SnakePlugin - configuracion
+# ============================================================
+#
+# Cualquier cambio aqui se aplica con /snake reload (no hace falta
+# reiniciar el servidor). Si borras este archivo, se regenera al
+# habilitar el plugin.
+
+# ------------------------------------------------------------
+# Modo de movimiento de la serpiente.
+#   smooth  -> la serpiente y tu vista se deslizan suavemente (recomendado)
+#   classic -> la serpiente avanza a saltos, bloque a bloque (como en las
+#              primeras versiones del plugin)
+# ------------------------------------------------------------
+movement-mode: smooth
+
+# ------------------------------------------------------------
+# Skins: los bloques que los jugadores pueden usar como "piel" de
+# su serpiente. Se agrupan en grupos y cada skin tiene un permiso:
+#
+#   snakeplugin.skins.<grupo>.<skin>
+#
+# Ejemplos:
+#   snakeplugin.skins.lana.rojo   -> solo lana roja
+#   snakeplugin.skins.lana.*      -> todo el grupo "lana"
+#   snakeplugin.skins.*           -> todas las skins
+#
+# default: true  -> todos los jugadores pueden usar las skins del grupo
+#                   sin necesidad de permiso (conveniente para el grupo base).
+# default: false -> solo las usan quienes tengan el permiso de la skin.
+# ------------------------------------------------------------
+skins:
+  lana:
+    display-name: "Lana"
+    icon: WHITE_WOOL
+    default: true
+    skins:
+      rojo:
+        display-name: "Lana Roja"
+        block: RED_WOOL
+      azul:
+        display-name: "Lana Azul"
+        block: BLUE_WOOL
+      verde:
+        display-name: "Lana Verde"
+        block: LIME_WOOL
+      amarillo:
+        display-name: "Lana Amarilla"
+        block: YELLOW_WOOL
+      naranja:
+        display-name: "Lana Naranja"
+        block: ORANGE_WOOL
+      morado:
+        display-name: "Lana Morada"
+        block: PURPLE_WOOL
+      cian:
+        display-name: "Lana Cian"
+        block: CYAN_WOOL
+      rosa:
+        display-name: "Lana Rosa"
+        block: PINK_WOOL
+  metales:
+    display-name: "Metales"
+    icon: IRON_BLOCK
+    default: false
+    skins:
+      hierro:
+        display-name: "Bloque de Hierro"
+        block: IRON_BLOCK
+      oro:
+        display-name: "Bloque de Oro"
+        block: GOLD_BLOCK
+      diamante:
+        display-name: "Bloque de Diamante"
+        block: DIAMOND_BLOCK
+      esmeralda:
+        display-name: "Bloque de Esmeralda"
+        block: EMERALD_BLOCK
