@@ -24,6 +24,10 @@ public final class SnakePlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        // Copia config.yml (el empaquetado en el jar) a la carpeta plugins/ en el
+        // primer arranque; si el archivo ya existe lo deja intacto.
+        saveDefaultConfig();
+
         this.snakeConfig = new SnakeConfig(this);
         this.skinManager = new SkinManager(this);
         this.gameManager = new GameManager(this, snakeConfig);
