@@ -49,7 +49,23 @@ public final class SnakePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SnakeGuiListener(this, gameManager, arenaManager, creationFlow, skinManager), this);
         new SnakeSteerPacketListener(this, gameManager).register();
 
-        getLogger().info("SnakePlugin habilitado (arenas persistentes con modo + maximo de jugadores, sala de espera, comando /snake, skins configurables).");
+        logBanner();
+    }
+
+    private void logBanner() {
+        String version = getDescription().getVersion();
+        getLogger().info("""
+                ══════════════════════════════════════════════════════
+                   ███████╗███╗   ██╗ █████╗ ██╗  ██╗███████╗
+                   ██╔════╝████╗  ██║██╔══██╗██║ ██╔╝██╔════╝
+                   ███████╗██╔██╗ ██║███████║█████╔╝ █████╗
+                   ╚════██║██║╚██╗██║██╔══██║██╔═██╗ ██╔══╝
+                   ███████║██║ ╚████║██║  ██║██║  ██╗███████╗
+                   ╚══════╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+                            SnakePlugin %s
+                     Plugin enabled successfully! Created by josebtan.
+                ══════════════════════════════════════════════════════
+                """.formatted(version));
     }
 
     @Override
