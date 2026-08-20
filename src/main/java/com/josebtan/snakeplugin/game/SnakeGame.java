@@ -205,6 +205,15 @@ public class SnakeGame {
         this.active = true;
         this.score = 0;
 
+        // Si el jugador esta en un mundo distinto al de la arena, hay que teletransportarlo
+        // ANTES de montarlo: seat.addPassenger(player) NO lo cruza de mundo por si solo (el
+        // "montar" vainilla asume que ambos ya estan en el mismo mundo; si no lo estan, el
+        // jugador se queda donde estaba y la partida arranca "coja" — bug real reportado).
+        Location seatSpawnLocation = seatLocationFor(spawn.location());
+        if (!player.getWorld().equals(seatSpawnLocation.getWorld())) {
+            player.teleport(seatSpawnLocation);
+        }
+
         this.seat = spawnSeat(spawn.location());
         seat.addPassenger(player);
 
